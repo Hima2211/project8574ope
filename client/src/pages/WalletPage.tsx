@@ -270,7 +270,7 @@ export default function WalletPage() {
   if (!user) return null;
 
   const currentBalance =
-    typeof balance === "object" ? balance.balance || 0 : balance || 0;
+    typeof balance === "object" && balance !== null ? balance.balance || 0 : balance || 0;
 
   // Prefer primary connected wallet crypto (USDC) display when available
   // If the server hasn't recorded the Privy wallet yet, show Privy as a fallback

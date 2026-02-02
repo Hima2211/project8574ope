@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 
 import { MobileNavigation } from "@/components/MobileNavigation";
+import { ProtectedAdminRoute } from "@/components/ProtectedAdminRoute";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +40,21 @@ interface EventStats {
 }
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
+  const { adminUser, adminToken, logout } = useAdminAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [showResultDialog, setShowResultDialog] = useState(false);
+
+  // Wrap with authentication check
+  return (
+    <ProtectedAdminRoute>
+      <AdminDashboardContent adminUser={adminUser} adminToken={adminToken} logout={logout} />
+    </ProtectedAdminRoute>
+  );
+}
+
+function AdminDashboardContent({ adminUser, adminToken, logout }: any) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);

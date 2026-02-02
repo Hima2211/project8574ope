@@ -235,20 +235,6 @@ export default function Profile() {
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow overflow-hidden border border-slate-200 dark:border-slate-700">
                   <button
                     type="button"
-                    onClick={() => navigate("/points")}
-                    className="w-full flex items-center px-4 py-4 text-gray-900 dark:text-gray-100 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
-                  >
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                      <i className="fas fa-trophy text-purple-600 text-sm"></i>
-                    </div>
-                    <div className="flex-1 text-left">
-                      <div className="font-medium text-sm">Levels & Badges</div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={() => navigate("/referrals")}
                     className="w-full flex items-center px-4 py-4 text-gray-900 dark:text-gray-100 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
                   >

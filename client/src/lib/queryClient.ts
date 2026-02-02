@@ -11,11 +11,31 @@ let cachedAuthToken: string | null = null;
 
 const TOKEN_STORAGE_KEY = 'supabaseAuthToken';
 
-export function setAuthToken(token: string | null) {
-  cachedAuthToken = token;
+/**
+ * Initialize auth token from localStorage on app startup
+ * This ensures token persists across page refreshes
+ */
+export function initializeAuthToken() {
   try {
-    if (token) {
-      localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    const stored = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (stored) {
+      cachedAuthToken = stored;
+      console.log('✅ Auth token restored from localStorage');
+      return stored;
+    }
+  } catch (err) {
+    console.warn('Failed to restore auth token from localStorage:', err);
+  }
+  return null;
+}
+
+export function setAuthToken(token: string | null) {
+  // Trim tokens to avoid accidental whitespace/newlines causing invalid signature errors
+  const cleaned = token ? token.trim() : null;
+  cachedAuthToken = cleaned;
+  try {
+    if (cleaned) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, cleaned);
     } else {
       localStorage.removeItem(TOKEN_STORAGE_KEY);
     }
@@ -141,13 +161,93 @@ export const queryClient = new QueryClient({
         if (contentType && contentType.includes("application/json")) {
           return res.json();
         }
-
-        return {};
+        return null;
       },
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: true,
-      retry: 1,
-      staleTime: 5 * 60 * 1000, // 5 minutes
     },
   },
 });
+
+// Admin token management
+let cachedAdminToken: string | null = null;
+
+const ADMIN_TOKEN_STORAGE_KEY = 'adminToken';
+
+export function setAdminToken(token: string | null) {
+  cachedAdminToken = token;
+  try {
+    if (token) {
+      localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+    }
+  } catch (err) {
+    // ignore localStorage failures
+  }
+}
+
+function getAdminToken(): string | null {
+  if (cachedAdminToken) return cachedAdminToken;
+  try {
+    const stored = localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+    if (stored) {
+      cachedAdminToken = stored;
+      return stored;
+    }
+  } catch (err) {
+    // ignore
+  }
+  return null;
+}
+
+// Admin API request (for use in admin pages)
+export async function adminApiRequest(
+  method: string,
+  url: string,
+  data?: unknown,
+): Promise<any> {
+  const adminToken = getAdminToken();
+  
+  if (!adminToken) {
+    console.error('❌ No admin token found for request to:', url);
+    throw new Error('Admin not authenticated');
+  }
+
+  const options: RequestInit = {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${adminToken}`,
+    },
+    credentials: "include",
+  };
+
+  if (data !== undefined) {
+    options.body = JSON.stringify(data);
+  }
+
+  const res = await fetch(url, options);
+
+  try {
+    throwIfResNotOk(res);
+  } catch (error) {
+    let errorMessage = `Error: ${res.status}`;
+    try {
+      const errorData = await res.json();
+      errorMessage += `: ${JSON.stringify(errorData)}`;
+    } catch {
+      errorMessage += `: ${res.statusText}`;
+    }
+    console.error("Admin API Request Error:", errorMessage);
+    throw new Error(errorMessage);
+  }
+
+  // Check if response has content
+  const contentType = res.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return res.json();
+  }
+
+  return {};
+}
+
+export default queryClient;

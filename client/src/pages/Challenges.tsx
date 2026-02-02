@@ -618,6 +618,12 @@ export default function Challenges() {
   }
 
   const sortedChallenges = [...filteredChallenges].sort((a: any, b: any) => {
+    // For "all" tab, sort by newest first
+    if (challengeStatusTab === 'all') {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+
+    // For other tabs (p2p, house), use priority-based sorting
     // Priority 0: Pinned challenges first
     if (a.isPinned && !b.isPinned) return -1;
     if (!a.isPinned && b.isPinned) return 1;

@@ -6,20 +6,29 @@ interface BadgeCounts {
   challenges: number;
 }
 
+const DEFAULT_BADGES: BadgeCounts = {
+  profile: 0,
+  events: 0,
+  challenges: 0,
+};
+
 export function useBadges() {
-  const { data: badges = { profile: 0, events: 0, challenges: 0 } } = useQuery<BadgeCounts>({
+  const { data: badges } = useQuery<BadgeCounts>({
     queryKey: ["/api/navigation/badges"],
     staleTime: 30000, // 30 seconds
     refetchInterval: 60000, // 1 minute
     retry: 1,
+    enabled: false, // Disable automatic fetching since endpoint may not exist
   });
 
+  const badgeData = badges || DEFAULT_BADGES;
+
   return {
-    profileBadgeCount: badges.profile,
-    eventsBadgeCount: badges.events,
-    challengesBadgeCount: badges.challenges,
-    hasProfileBadge: badges.profile > 0,
-    hasEventsBadge: badges.events > 0,
-    hasChallengesBadge: badges.challenges > 0,
+    profileBadgeCount: badgeData.profile,
+    eventsBadgeCount: badgeData.events,
+    challengesBadgeCount: badgeData.challenges,
+    hasProfileBadge: badgeData.profile > 0,
+    hasEventsBadge: badgeData.events > 0,
+    hasChallengesBadge: badgeData.challenges > 0,
   };
 }

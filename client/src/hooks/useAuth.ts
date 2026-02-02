@@ -28,12 +28,42 @@ export function useAuth() {
       
       // If authenticated, exchange Privy wallet for Supabase JWT
       if (authenticated && user?.wallet?.address) {
-        // Prevent multiple simultaneous exchanges
+        // Prevent multiple simultaneous exchanges, but verify stored token first
         const currentToken = localStorage.getItem('supabaseAuthToken');
-        if (currentToken) {
-          // If we already have a token, don't exchange again unless user changed
-          // This is a simple heuristic to avoid loops
-          return;
+
+        // Helper: determine if a token is a Supabase-issued JWT we should trust
+        const isSupabaseToken = (token?: string | null) => {
+          if (!token) return false;
+          try {
+            const parts = token.split('.');
+            if (parts.length !== 3) return false;
+            const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+
+            // Must not be a Privy DID subject
+            if (typeof payload?.sub === 'string' && payload.sub.startsWith('did:')) return false;
+
+            // Prefer tokens issued for Supabase authenticated audience
+            if (payload?.aud && payload?.aud !== 'authenticated') return false;
+
+            // Optional: if iss exists, prefer Supabase issuer
+            if (payload?.iss && typeof payload.iss === 'string' && !payload.iss.includes('supabase')) return false;
+
+            // Must include user metadata we expect from our server-issued Supabase JWT
+            if (!payload?.user_metadata || !payload.user_metadata.wallet_address) return false;
+
+            return true;
+          } catch (err) {
+            return false;
+          }
+        };
+
+        if (currentToken && isSupabaseToken(currentToken)) {
+          console.log('✅ Valid Supabase token present, skipping exchange');
+          return; // token looks like a Supabase JWT -> skip exchange
+        }
+
+        if (currentToken && !isSupabaseToken(currentToken)) {
+          console.warn('⚠️ Stored token is not a Supabase token — forcing Privy→Supabase exchange');
         }
 
         (async () => {

@@ -32,6 +32,19 @@ export async function initializeFirebase() {
     } else if (process.env.FIREBASE_ADMIN_KEY_PATH) {
       // Try to load from file path
       const keyPath = resolve(process.env.FIREBASE_ADMIN_KEY_PATH);
+
+      // Guard: if file does not exist, log a concise warning and skip initialization
+      try {
+        if (!require('fs').existsSync(keyPath)) {
+          console.warn(`⚠️  Firebase key file not found at ${keyPath}. Push notifications disabled.`);
+          console.warn('   Set FIREBASE_ADMIN_CREDENTIALS or ensure FIREBASE_ADMIN_KEY_PATH points to a valid file');
+          return;
+        }
+      } catch (err) {
+        console.warn('⚠️  Could not access Firebase key path:', err?.message || err);
+        return;
+      }
+
       const credentials = JSON.parse(readFileSync(keyPath, 'utf-8'));
       admin.initializeApp({
         credential: admin.credential.cert(credentials as any),

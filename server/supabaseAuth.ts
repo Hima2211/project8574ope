@@ -1,7 +1,34 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_change_in_production';
+// Decode the JWT_SECRET from base64 (Supabase format)
+// Return a Buffer for base64 secrets (better for binary secrets) or string otherwise
+function getJwtSecret(): Buffer | string {
+  let envSecret = (process.env.JWT_SECRET || 'your_jwt_secret_key_change_in_production').trim();
+  // Strip surrounding quotes if present
+  envSecret = envSecret.replace(/^"|"$/g, '');
+
+  // Detect base64-like strings (common for Supabase JWT secrets)
+  const base64Like = /^[A-Za-z0-9+/]+={0,2}$/.test(envSecret) && envSecret.length >= 32;
+
+  if (base64Like) {
+    try {
+      const buf = Buffer.from(envSecret, 'base64');
+      // Re-encode and compare to avoid false-positives
+      if (buf.toString('base64').replace(/=+$/, '') === envSecret.replace(/=+$/, '')) {
+        console.log('✅ Using base64-decoded JWT_SECRET (Buffer)');
+        return buf;
+      }
+    } catch (e) {
+      // Fall through and use string
+    }
+  }
+
+  console.log('✅ Using JWT_SECRET as string');
+  return envSecret;
+}
+
+const JWT_SECRET = getJwtSecret();
 
 /**
  * Create or get a user by wallet address
@@ -116,11 +143,29 @@ export function SupabaseAuthMiddleware(req: any, res: any, next: any) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const token = authHeader.replace('Bearer ', '');
+  const token = authHeader.replace('Bearer ', '').trim();
   console.log(`🔑 Token received (${token.length} chars)`);
+  console.log(`   Token preview: ${token.substring(0, 50)}...`);
+  if (Buffer.isBuffer(JWT_SECRET)) {
+    console.log(`   JWT_SECRET used (buffer base64 preview): ${JWT_SECRET.toString('base64').substring(0, 20)}... (buffer length: ${JWT_SECRET.length})`);
+  } else {
+    console.log(`   JWT_SECRET used: ${JWT_SECRET.substring(0, 20)}... (length: ${JWT_SECRET.length})`);
+  }
 
   try {
-    const decoded = jwt.decode(token) as any;
+    // First, decode without verifying to see what we're dealing with
+    const unverified = jwt.decode(token) as any;
+    console.log(`   Token payload - sub: ${unverified?.sub}, aud: ${unverified?.aud}`);
+
+    // Detect Privy DID tokens early to avoid cryptic "invalid signature" errors
+    if (typeof unverified?.sub === 'string' && unverified.sub.startsWith('did:privy:')) {
+      console.error('❌ Received Privy DID token where Supabase JWT expected');
+      return res.status(401).json({ error: 'Invalid token', details: 'expected Supabase JWT, received Privy DID token' });
+    }
+    
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'],
+    }) as any;
 
     if (!decoded || !decoded.sub) {
       console.error('❌ Invalid token or no user ID');
@@ -138,6 +183,7 @@ export function SupabaseAuthMiddleware(req: any, res: any, next: any) {
     next();
   } catch (error: any) {
     console.error('❌ Auth error:', error.message);
-    return res.status(401).json({ error: 'Invalid token' });
+    console.error(`   Error type: ${error.name}`);
+    return res.status(401).json({ error: 'Invalid token', details: error.message });
   }
 }

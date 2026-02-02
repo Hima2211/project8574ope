@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAdminQuery, adminApiRequest } from "@/lib/adminApi";
+import { ProtectedAdminRoute } from "@/components/ProtectedAdminRoute";
 import AdminLayout from "@/components/AdminLayout";
 import { AdminUserWeeklyPointsPayout } from "@/components/AdminWeeklyPointsClaim";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -257,8 +258,9 @@ export default function AdminDashboardOverview() {
   }
 
   return (
-    <AdminLayout>
-      <div className="space-y-6">
+    <ProtectedAdminRoute>
+      <AdminLayout>
+        <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -843,5 +845,6 @@ export default function AdminDashboardOverview() {
         </DialogContent>
       </Dialog>
     </AdminLayout>
+    </ProtectedAdminRoute>
   );
 }

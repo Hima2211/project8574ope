@@ -1,7 +1,7 @@
 import React from "react";
 import { useEffect, useState } from "react";
 import { Router, Switch, Route, useLocation } from "wouter";
-import { apiRequest, queryClient } from "./lib/queryClient";
+import { apiRequest, queryClient, initializeAuthToken } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -160,6 +160,9 @@ function App() {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    // Initialize auth token from localStorage on app startup
+    initializeAuthToken();
+    
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };

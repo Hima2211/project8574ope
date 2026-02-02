@@ -8,6 +8,7 @@ import { db } from '../db';
 import { users, transactions, dailyLogins } from '../../shared/schema';
 import { eq, desc } from 'drizzle-orm';
 import { isAuthenticated } from '../middleware/auth';
+import { SupabaseAuthMiddleware } from '../supabaseAuth';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ const router = Router();
  * POST /api/user/fcm-token
  * Save FCM token for current user (for push notifications)
  */
-router.post('/fcm-token', isAuthenticated, async (req: Request, res: Response) => {
+router.post('/fcm-token', SupabaseAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const { token } = req.body;
     const userId = req.user?.id;
@@ -58,7 +59,7 @@ router.post('/fcm-token', isAuthenticated, async (req: Request, res: Response) =
  * GET /api/user/profile
  * Get current user profile
  */
-router.get('/profile', isAuthenticated, async (req: Request, res: Response) => {
+router.get('/profile', SupabaseAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
@@ -159,14 +160,17 @@ router.get('/users/:userId/profile', async (req: Request, res: Response) => {
  * GET /api/transactions
  * Get current user's transaction history (deposits, withdrawals, challenge earnings, etc.)
  */
-router.get('/transactions', isAuthenticated, async (req: Request, res: Response) => {
+router.get('/transactions', SupabaseAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     const { limit = 50, offset = 0 } = req.query;
 
     if (!userId) {
+      console.error('❌ No userId in request for transactions');
       return res.status(401).json({ error: 'Not authenticated' });
     }
+
+    console.log(`📋 Fetching transactions for user: ${userId}`);
 
     const limitNum = Math.min(parseInt(limit as string) || 50, 200);
     const offsetNum = parseInt(offset as string) || 0;
@@ -220,7 +224,7 @@ router.get('/transactions', isAuthenticated, async (req: Request, res: Response)
  * PATCH /api/user/profile
  * Update current user profile
  */
-router.patch('/profile', isAuthenticated, async (req: Request, res: Response) => {
+router.patch('/profile', SupabaseAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     const { firstName, lastName, username, profileImageUrl } = req.body;
@@ -266,7 +270,7 @@ router.patch('/profile', isAuthenticated, async (req: Request, res: Response) =>
  * GET /api/user/stats
  * Get user statistics (wins, friends, challenges created, etc.)
  */
-router.get('/stats', isAuthenticated, async (req: Request, res: Response) => {
+router.get('/stats', SupabaseAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
@@ -310,7 +314,7 @@ router.get('/stats', isAuthenticated, async (req: Request, res: Response) => {
  * GET /api/user/achievements
  * Get user achievements/badges
  */
-router.get('/achievements', isAuthenticated, async (req: Request, res: Response) => {
+router.get('/achievements', SupabaseAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
@@ -385,7 +389,7 @@ router.get('/achievements', isAuthenticated, async (req: Request, res: Response)
  * GET /api/daily-signin/history
  * Get user's daily login history
  */
-router.get('/daily-signin/history', isAuthenticated, async (req: Request, res: Response) => {
+router.get('/daily-signin/history', SupabaseAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     const { limit = 30 } = req.query;

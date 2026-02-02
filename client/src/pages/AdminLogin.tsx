@@ -1,13 +1,12 @@
 
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Lock, Shield, Eye, EyeOff } from "lucide-react";
 
 export default function AdminLogin() {
@@ -16,35 +15,12 @@ export default function AdminLogin() {
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { login } = useAdminAuth();
 
-  const adminLoginMutation = useMutation({
-    mutationFn: async (loginData: typeof credentials) => {
-      return apiRequest('POST', '/api/admin/login', loginData);
-    },
-    onSuccess: (data) => {
-      if (!data?.token || !data?.user) {
-        throw new Error('Invalid login response: missing token or user data');
-      }
-      localStorage.setItem('adminToken', data.token);
-      localStorage.setItem('adminUser', JSON.stringify(data.user));
-      toast({
-        title: "Admin Login Successful",
-        description: `Welcome back, ${(data.user?.firstName || data.user?.username || 'Admin')}!`,
-      });
-      navigate('/admin');
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Admin Login Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!credentials.username || !credentials.password) {
       toast({
@@ -54,7 +30,21 @@ export default function AdminLogin() {
       });
       return;
     }
-    adminLoginMutation.mutate(credentials);
+
+    try {
+      setIsSubmitting(true);
+      const result = await login(credentials.username, credentials.password);
+      if (result && result.token) {
+        // Give a small delay for state to update, then navigate to admin dashboard
+        setTimeout(() => {
+          navigate('/admin');
+        }, 500);
+      }
+    } catch (error) {
+      // Error is handled by the login function
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleInputChange = (field: keyof typeof credentials, value: string) => {
@@ -138,9 +128,9 @@ export default function AdminLogin() {
               <Button
                 type="submit"
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
-                disabled={adminLoginMutation.isPending}
+                disabled={isSubmitting}
               >
-                {adminLoginMutation.isPending ? (
+                {isSubmitting ? (
                   <div className="flex items-center space-x-2">
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     <span>Authenticating...</span>
@@ -153,7 +143,6 @@ export default function AdminLogin() {
                 )}
               </Button>
             </form>
-
             {/* Security Notice */}
             <Alert className="mt-6 bg-amber-900/20 border-amber-800">
               <Shield className="w-4 h-4 text-amber-400" />

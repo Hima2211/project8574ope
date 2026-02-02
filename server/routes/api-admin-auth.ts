@@ -1,7 +1,9 @@
 import express, { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { storage } from '../storage';
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_change_in_production';
 
 /**
  * POST /api/admin/login
@@ -38,8 +40,22 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Invalid username or password' });
     }
 
-    // Generate admin token: admin_<userId>_<timestamp>
-    const token = `admin_${user.id}_${Date.now()}`;
+    // Generate JWT token for admin (with longer expiry than regular users - 7 days)
+    const token = jwt.sign(
+      {
+        aud: 'admin',
+        sub: user.id,
+        isAdmin: true,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60), // 7 days
+        email: user.email,
+        username: user.username,
+      },
+      JWT_SECRET,
+      {
+        algorithm: 'HS256',
+      }
+    );
 
     console.log(`✅ Admin login successful for: ${username}`);
 
@@ -57,6 +73,53 @@ router.post('/login', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Admin login error:', error);
     res.status(500).json({ message: 'Login failed: ' + (error instanceof Error ? error.message : 'Unknown error') });
+  }
+});
+
+/**
+ * GET /api/admin/verify
+ * Verify admin token and return admin user info
+ */
+router.get('/verify', (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    console.log(`🔐 Admin verify request`);
+    console.log(`   Authorization header: ${authHeader ? 'Present' : 'MISSING'}`);
+
+    if (!authHeader) {
+      console.error('❌ No Authorization header');
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    console.log(`🔑 Token received (${token.length} chars)`);
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET, {
+        algorithms: ['HS256'],
+      }) as any;
+
+      if (decoded.aud !== 'admin') {
+        console.error('❌ Token is not an admin token');
+        return res.status(403).json({ error: 'Not an admin token' });
+      }
+
+      console.log(`✅ Admin token verified for: ${decoded.username}`);
+      
+      return res.json({
+        id: decoded.sub,
+        username: decoded.username,
+        email: decoded.email,
+        isAdmin: decoded.isAdmin,
+      });
+    } catch (tokenError: any) {
+      console.error('❌ Token verification failed:', tokenError.message);
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+  } catch (error) {
+    console.error('Admin verify error:', error);
+    res.status(500).json({ error: 'Verification failed' });
   }
 });
 
