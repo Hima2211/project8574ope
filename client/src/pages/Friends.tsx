@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +42,74 @@ const createChallengeSchema = z.object({
   dueDate: z.string().min(1, "Due date required"),
   paymentToken: z.enum(['ETH', 'USDT', 'USDC']).default('ETH'),
 });
-  export default function Friends() {
+
+function FriendUserCardSkeleton() {
+  return (
+    <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+      <CardContent className="p-2 md:p-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2 flex-1">
+            <Skeleton className="h-9 w-9 rounded-full bg-slate-200 dark:bg-slate-700" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-3 w-20 rounded bg-slate-200 dark:bg-slate-700" />
+              <Skeleton className="h-2.5 w-24 rounded bg-slate-100 dark:bg-slate-700/50" />
+            </div>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <Skeleton className="h-8 w-16 rounded-lg bg-slate-200 dark:bg-slate-700" />
+            <Skeleton className="h-8 w-20 rounded-lg bg-slate-200 dark:bg-slate-700" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FriendRequestCardSkeleton() {
+  return (
+    <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3 flex-1">
+            <Skeleton className="h-12 w-12 rounded-full bg-slate-200 dark:bg-slate-700" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-4 w-32 rounded bg-slate-200 dark:bg-slate-700" />
+              <Skeleton className="h-3 w-40 rounded bg-slate-100 dark:bg-slate-700/50" />
+            </div>
+          </div>
+          <div className="flex space-x-2">
+            <Skeleton className="h-10 w-20 rounded-lg bg-slate-200 dark:bg-slate-700" />
+            <Skeleton className="h-10 w-20 rounded-lg bg-slate-200 dark:bg-slate-700" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AllUserCardSkeleton() {
+  return (
+    <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+      <CardContent className="p-2 md:p-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2 flex-1">
+            <Skeleton className="h-9 w-9 rounded-full bg-slate-200 dark:bg-slate-700" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-3 w-20 rounded bg-slate-200 dark:bg-slate-700" />
+              <Skeleton className="h-2.5 w-24 rounded bg-slate-100 dark:bg-slate-700/50" />
+            </div>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <Skeleton className="h-8 w-20 rounded-lg bg-slate-200 dark:bg-slate-700" />
+            <Skeleton className="h-8 w-20 rounded-lg bg-slate-200 dark:bg-slate-700" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function Friends() {
     const { user } = useAuth();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState("");
@@ -505,11 +573,10 @@ const createChallengeSchema = z.object({
 
           <TabsContent value="friends" className="space-y-4">
             {isLoading ? (
-              <div className="text-center py-12">
-                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-slate-600 dark:text-slate-400">
-                  Loading friends...
-                </p>
+              <div className="space-y-2">
+                {[...Array(3)].map((_, i) => (
+                  <FriendUserCardSkeleton key={i} />
+                ))}
               </div>
             ) : (
               <div className="space-y-2">
@@ -558,6 +625,14 @@ const createChallengeSchema = z.object({
           </TabsContent>
 
           <TabsContent value="users" className="space-y-2">
+            {isLoading ? (
+              <div className="space-y-2">
+                {[...Array(4)].map((_, i) => (
+                  <AllUserCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
             {filteredUsersFinal.map((user: any) => (
               <Card
                 key={user.id}
@@ -609,12 +684,18 @@ const createChallengeSchema = z.object({
                 </CardContent>
               </Card>
             ))}
+            </div>
+            )}
           </TabsContent>
 
-          
-
           <TabsContent value="requests" className="space-y-4">
-            {pendingRequests.length === 0 ? (
+            {requestsLoading || sentRequestsLoading ? (
+              <div className="space-y-4">
+                {[...Array(3)].map((_, i) => (
+                  <FriendRequestCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : pendingRequests.length === 0 ? (
               <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
                 <CardContent className="text-center py-12">
                   <i

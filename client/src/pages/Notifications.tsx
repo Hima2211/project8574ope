@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DailyLoginModal } from "@/components/DailyLoginModal";
+import { AcceptChallengeModal } from "@/components/AcceptChallengeModal";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -20,6 +21,8 @@ export default function Notifications() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showDailyLoginModal, setShowDailyLoginModal] = useState(false);
+  const [showAcceptChallengeModal, setShowAcceptChallengeModal] = useState(false);
+  const [selectedChallengeToAccept, setSelectedChallengeToAccept] = useState<any>(null);
   const { dailyLoginStatus } = useDailyLoginPopup();
 
   const { data: notifications = [], isLoading, error } = useQuery({
@@ -356,12 +359,13 @@ export default function Notifications() {
                                 if (!notification.read) {
                                   handleMarkAsRead(notification.id);
                                 }
-                                const challengeId = notification.data?.challengeId || notification.challengeId;
-                                if (challengeId) {
-                                  window.location.href = `/challenges/${challengeId}`;
-                                } else {
-                                  window.location.href = '/challenges';
-                                }
+                                // Set up the challenge object with the notification data
+                                const challenge = {
+                                  id: notification.data?.challengeId || notification.challengeId,
+                                  ...notification.data,
+                                };
+                                setSelectedChallengeToAccept(challenge);
+                                setShowAcceptChallengeModal(true);
                               }}
                             >
                               <i className="fas fa-check mr-0.5"></i>
@@ -742,6 +746,22 @@ export default function Notifications() {
           queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
         }}
       />
+
+      {/* Accept Challenge Modal */}
+      <AcceptChallengeModal
+        isOpen={showAcceptChallengeModal}
+        onClose={() => {
+          setShowAcceptChallengeModal(false);
+          setSelectedChallengeToAccept(null);
+        }}
+        challenge={selectedChallengeToAccept}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/challenges"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        }}
+      />
+
+      <MobileNavigation />
     </div>
   );
 }

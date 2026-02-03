@@ -7,6 +7,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,68 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+
+// Skeleton Components
+function BalanceCardsSkeleton() {
+  return (
+    <div className="grid grid-cols-3 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3 mb-3 sm:mb-5">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="bg-slate-100 dark:bg-slate-800 rounded-xl sm:rounded-2xl p-2 sm:p-4 border border-slate-200 dark:border-slate-700 animate-pulse">
+          <div className="flex items-center justify-between mb-1 sm:mb-2">
+            <Skeleton className="w-6 sm:w-8 h-6 sm:h-8 rounded-lg sm:rounded-xl" />
+          </div>
+          <div className="space-y-0.5">
+            <Skeleton className="h-3 w-12 rounded" />
+            <Skeleton className="h-5 sm:h-6 w-20 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ChartSkeleton() {
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700 mt-6 sm:mt-8 animate-pulse">
+      <div className="flex items-center justify-between mb-4">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-40 rounded" />
+          <Skeleton className="h-3 w-32 rounded" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-10 rounded-lg" />
+          <Skeleton className="h-8 w-10 rounded-lg" />
+        </div>
+      </div>
+      <Skeleton className="h-48 w-full rounded" />
+    </div>
+  );
+}
+
+function TransactionSkeleton() {
+  return (
+    <div className="flex items-center justify-between p-3 animate-pulse">
+      <div className="flex items-center gap-3 flex-1">
+        <Skeleton className="w-10 h-10 rounded-2xl" />
+        <div className="space-y-2 flex-1">
+          <Skeleton className="h-4 w-24 rounded" />
+          <Skeleton className="h-3 w-32 rounded" />
+        </div>
+      </div>
+      <Skeleton className="h-4 w-16 rounded" />
+    </div>
+  );
+}
+
+function TransactionListSkeleton() {
+  return (
+    <div className="space-y-3">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <TransactionSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
 
 export default function WalletPage() {
   const { user } = useAuth();
@@ -180,7 +243,7 @@ export default function WalletPage() {
     syncWallet();
   }, [user?.id, privyUser?.wallet?.address, queryClient]);
 
-  const { data: balance = { balance: 0 } } = useQuery({
+  const { data: balance = { balance: 0 }, isLoading: balanceLoading } = useQuery({
     queryKey: ["/api/wallet/balance"],
     retry: false,
     onError: (error: Error) => {
@@ -201,10 +264,11 @@ export default function WalletPage() {
 
   
 
-  const { data: pointsData } = useQuery({
+  const { data: pointsData, refetch: refetchPoints, isLoading: pointsLoading } = useQuery({
     queryKey: ["/api/points/balance", user?.id],
     enabled: !!user?.id,
     retry: false,
+    refetchInterval: 5000, // Auto-refetch every 5 seconds for real-time updates
     queryFn: async () => {
       return await apiRequest("GET", `/api/points/balance/${user.id}`);
     },
@@ -618,64 +682,37 @@ export default function WalletPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {txArray.slice(0, 5).map((transaction: any) => (
-                <div
-                  key={transaction.id}
-                  className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-2xl transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                        transaction.type === "deposit" ||
-                        transaction.type === "signup_bonus" ||
-                        transaction.type === "daily_signin" ||
-                        transaction.type === "Gift received"
-                          ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
-                          : transaction.type === "coin_purchase" &&
-                              parseFloat(transaction.amount) > 0
-                            ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400"
-                            : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
-                      }`}
-                    >
-                      {transaction.type === "signup_bonus" && (
-                        <Trophy className="w-5 h-5" />
-                      )}
-                      {transaction.type === "daily_signin" && (
-                        <Calendar className="w-5 h-5" />
-                      )}
-                      {transaction.type === "coin_purchase" && (
-                        <ShoppingCart className="w-5 h-5" />
-                      )}
-                      {transaction.type === "challenge_escrow" && (
-                        <ArrowUpRight className="w-5 h-5" />
-                      )}
-                      {transaction.type === "Gifted" && (
-                        <Gift className="w-5 h-5" />
-                      )}
-                      {transaction.type === "Gift received" && (
-                        <Gift className="w-5 h-5" />
-                      )}
-                      {![
-                        "signup_bonus",
-                        "daily_signin",
-                        "coin_purchase",
-                        "challenge_escrow",
-                        "Gifted",
-                        "Gift received",
-                      ].includes(transaction.type) && (
-                        <Wallet className="w-5 h-5" />
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-slate-900 dark:text-white text-sm">
-                        {transaction.type === "signup_bonus" && "Welcome Bonus"}
-                        {transaction.type === "daily_signin" && "Daily Sign-in"}
-                        {transaction.type === "coin_purchase" &&
-                          "Coin Purchase"}
-                        {transaction.type === "challenge_escrow" &&
-                          "Challenge Entry"}
-                        {transaction.type === "Gifted" && "Gifted"}
-                        {transaction.type === "Gift received" && "Gift received"}
+              {txArray.slice(0, 10).map((transaction: any) => {
+                // Determine icon and color based on transaction type
+                const isPoints = transaction.type?.includes('points') || transaction.description?.includes('Bantah');
+                const isEarning = parseFloat(transaction.amount) >= 0;
+                const isChallengeWin = transaction.type?.includes('challenge') && isEarning && transaction.description?.includes('Won');
+                
+                return (
+                  <div
+                    key={transaction.id}
+                    className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-2xl transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+                          (transaction.type === "deposit" || transaction.type === "signup_bonus" || transaction.type === "daily_signin" || transaction.type === "Gift received" || isPoints && isEarning)
+                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
+                            : isChallengeWin
+                              ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                              : transaction.type === "coin_purchase" && parseFloat(transaction.amount) > 0
+                                ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400"
+                                : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        {isPoints && <Zap className="w-5 h-5" />}
+                        {isChallengeWin && <Trophy className="w-5 h-5" />}
+                        {transaction.type === "signup_bonus" && <Trophy className="w-5 h-5" />}
+                        {transaction.type === "daily_signin" && <Calendar className="w-5 h-5" />}
+                        {transaction.type === "coin_purchase" && <ShoppingCart className="w-5 h-5" />}
+                        {transaction.type === "challenge_escrow" && <ArrowUpRight className="w-5 h-5" />}
+                        {transaction.type === "Gifted" && <Gift className="w-5 h-5" />}
+                        {transaction.type === "Gift received" && <Gift className="w-5 h-5" />}
                         {![
                           "signup_bonus",
                           "daily_signin",
@@ -683,36 +720,62 @@ export default function WalletPage() {
                           "challenge_escrow",
                           "Gifted",
                           "Gift received",
-                        ].includes(transaction.type) &&
-                          transaction.type.charAt(0).toUpperCase() +
-                            transaction.type.slice(1)}
-                      </h4>
-                      <p className="text-xs text-slate-400">
-                        {formatDistanceToNow(new Date(transaction.createdAt), {
-                          addSuffix: true,
-                        })}
+                        ].includes(transaction.type) && !isPoints && <Wallet className="w-5 h-5" />}
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-slate-900 dark:text-white text-sm">
+                          {isPoints && "🎯 Bantah Points"}
+                          {!isPoints && (
+                            <>
+                              {transaction.type === "signup_bonus" && "Welcome Bonus"}
+                              {transaction.type === "daily_signin" && "Daily Sign-in"}
+                              {transaction.type === "coin_purchase" && "Coin Purchase"}
+                              {transaction.type === "challenge_escrow" && "Challenge Entry"}
+                              {transaction.type === "Gifted" && "Gifted"}
+                              {transaction.type === "Gift received" && "Gift received"}
+                              {![
+                                "signup_bonus",
+                                "daily_signin",
+                                "coin_purchase",
+                                "challenge_escrow",
+                                "Gifted",
+                                "Gift received",
+                              ].includes(transaction.type) &&
+                                transaction.type.charAt(0).toUpperCase() +
+                                  transaction.type.slice(1)}
+                            </>
+                          )}
+                        </h4>
+                        <p className="text-xs text-slate-400">
+                          {transaction.description ? transaction.description.substring(0, 40) : ''}
+                          {formatDistanceToNow(new Date(transaction.createdAt), {
+                            addSuffix: true,
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`text-sm font-semibold ${
+                          parseFloat(transaction.amount) >= 0
+                            ? "text-green-600 dark:text-green-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        {parseFloat(transaction.amount) >= 0 ? "+" : ""}
+                        {isPoints
+                          ? `${Math.abs(parseFloat(transaction.amount) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} BPTS`
+                          : ['Gifted', 'Gift received', 'challenge_escrow'].includes(transaction.type)
+                            ? `${Math.abs(parseInt(transaction.amount)).toLocaleString()} coins`
+                            : (typeof transaction.amount === 'number' || !isNaN(Number(transaction.amount)))
+                              ? Number(transaction.amount).toLocaleString(undefined, { maximumFractionDigits: 4 })
+                              : String(transaction.amount)
+                        }
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p
-                      className={`text-sm font-semibold ${
-                        parseFloat(transaction.amount) >= 0
-                          ? "text-green-600 dark:text-green-400"
-                          : "text-red-600 dark:text-red-400"
-                      }`}
-                    >
-                      {parseFloat(transaction.amount) >= 0 ? "+" : ""}
-                      {['Gifted', 'Gift received', 'challenge_escrow'].includes(transaction.type)
-                        ? `${Math.abs(parseInt(transaction.amount)).toLocaleString()} coins`
-                        : (typeof transaction.amount === 'number' || !isNaN(Number(transaction.amount)))
-                          ? Number(transaction.amount).toLocaleString(undefined, { maximumFractionDigits: 4 })
-                          : String(transaction.amount)
-                      }
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

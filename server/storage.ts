@@ -10,7 +10,7 @@ import {
 } from "@shared/schema";
 import { userWalletAddresses } from "@shared/schema-blockchain";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, gte, lte } from "drizzle-orm";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 
@@ -164,8 +164,8 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(dailyLogins)
       .where(eq(dailyLogins.userId, userId))
-      .where(dailyLogins.date.gte(startOfToday) as any)
-      .where(dailyLogins.date.lte(endOfToday) as any)
+      .where(gte(dailyLogins.date, startOfToday))
+      .where(lte(dailyLogins.date, endOfToday))
       .orderBy(desc(dailyLogins.date))
       .limit(1);
 

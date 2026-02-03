@@ -16,7 +16,7 @@ import {
   getChallengeParticipants 
 } from '../blockchain/helpers';
 import { db } from '../db';
-import { challenges, users } from '../../shared/schema';
+import { challenges, users, transactions } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 import { NotificationService, NotificationEvent, NotificationChannel, NotificationPriority } from '../notificationService';
 import { notifyPointsEarnedWin } from '../utils/bantahPointsNotifications';
@@ -151,6 +151,27 @@ router.post(
           const paymentAmount = challenge.amount ? `+${challenge.amount} stakes` : 'stakes';
           notifyPaymentReleased(winnerId, challengeId, paymentAmount, challengeTitle, loserName)
             .catch(err => console.warn('Failed to notify winner of payment release:', err.message));
+
+          // Award points to winner
+          try {
+            await db.execute(
+              `UPDATE users SET points = points + ${pointsAwarded} WHERE id = '${winnerId}'`
+            );
+
+            // Create transaction record for the win
+            await db.insert(transactions).values({
+              userId: winnerId,
+              type: 'challenge_won',
+              amount: pointsAwarded.toString(),
+              description: `Won challenge "${challengeTitle}" against @${loserName}`,
+              status: 'completed',
+              createdAt: new Date(),
+            });
+
+            console.log(`💰 Awarded ${pointsAwarded} points to winner ${winnerId}`);
+          } catch (err) {
+            console.warn(`Failed to award points to winner:`, err);
+          }
         }
 
         // Send notification to loser

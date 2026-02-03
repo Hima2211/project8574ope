@@ -1,5 +1,5 @@
 import React, { useEffect, useState, Suspense, lazy } from "react";
-import { Router, Switch, Route, useLocation } from "wouter";
+import { Router, Switch, Route, useLocation, useParams } from "wouter";
 import { apiRequest, queryClient, initializeAuthToken } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -35,6 +35,9 @@ import Leaderboard from "./pages/Leaderboard";
 import About from "./pages/About";
 import PointsAndBadges from "./pages/PointsAndBadges";
 import ChallengeDetail from "./pages/ChallengeDetail";
+import OpenChallengeDetail from "./pages/OpenChallengeDetail";
+import DirectChallengeDetail from "./pages/DirectChallengeDetail";
+import GroupChallengeDetail from "./pages/GroupChallengeDetail";
 import Recommendations from "./pages/Recommendations";
 import EventChatPage from "./pages/EventChatPage";
 import AdminDashboardOverview from "./pages/AdminDashboardOverview";
@@ -75,6 +78,51 @@ import EventDetails from "./pages/EventDetails";
 import ChallengeChatPage from "./pages/ChallengeChatPage";
 import { PrivyProvider } from '@privy-io/react-auth';
 import { privyConfig } from './lib/privyConfig';
+
+// Challenge detail router that detects challenge type
+function ChallengeDetailRouter() {
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
+
+  console.log('ChallengeDetailRouter: Received params:', params, 'id:', id);
+
+  const { data: challenge, isLoading, error } = React.useQuery({
+    queryKey: [`/api/challenges/${id}`],
+    enabled: !!id,
+    retry: false,
+  });
+
+  console.log('ChallengeDetailRouter: Query result - isLoading:', isLoading, 'error:', error, 'challenge:', challenge);
+
+  // Still loading
+  if (isLoading) {
+    console.log('ChallengeDetailRouter: Still loading, showing ChallengeDetail');
+    return <ChallengeDetail />;
+  }
+
+  // Error or no challenge found
+  if (error || !challenge) {
+    console.log('ChallengeDetailRouter: Error or no challenge, showing ChallengeDetail');
+    return <ChallengeDetail />;
+  }
+
+  // Route based on challenge type
+  console.log('ChallengeDetailRouter: Challenge loaded, adminCreated:', challenge.adminCreated, 'challenged:', challenge.challenged);
+  
+  if (challenge.adminCreated) {
+    // Group/Admin/Betting pool challenge
+    console.log('ChallengeDetailRouter: Routing to GroupChallengeDetail');
+    return <GroupChallengeDetail />;
+  } else if (challenge.challenged) {
+    // Direct P2P challenge (has a specific challenged user)
+    console.log('ChallengeDetailRouter: Routing to DirectChallengeDetail');
+    return <DirectChallengeDetail />;
+  } else {
+    // Open P2P challenge (no specific opponent)
+    console.log('ChallengeDetailRouter: Routing to OpenChallengeDetail');
+    return <OpenChallengeDetail />;
+  }
+}
 
 function AppRouter() {
   const { user, isAuthenticated, isLoading } = useAuth();

@@ -468,6 +468,16 @@ router.post('/create-p2p', PrivyAuthMiddleware, upload.single('coverImage'), asy
       // Update user's actual points balance
       await db.execute(sql`UPDATE users SET points = points + ${creationPoints} WHERE id = ${userId}`);
       
+      // Create transaction record for points earned
+      await db.insert(transactions).values({
+        userId,
+        type: 'challenge_created',
+        amount: creationPoints.toString(),
+        description: `Created challenge: "${title}"`,
+        status: 'completed',
+        createdAt: new Date(),
+      });
+      
       console.log(`✅ Points transaction recorded: ${creationPoints} points to creator`);
     } catch (pointsError) {
       console.error('Failed to record creation points:', pointsError);
@@ -918,6 +928,16 @@ router.post('/:id/join', PrivyAuthMiddleware, async (req: Request, res: Response
         .set({ points: sql`${users.points} + ${Math.floor(participationPoints)}` })
         .where(eq(users.id, userId));
 
+      // Create transaction record
+      await db.insert(transactions).values({
+        userId,
+        type: 'challenge_joined',
+        amount: participationPoints.toString(),
+        description: `Joined challenge: "${challenge.title || `Challenge #${challengeId}`}"`,
+        status: 'completed',
+        createdAt: new Date(),
+      });
+
       await recordPointsTransaction({
         userId,
         challengeId,
@@ -1046,6 +1066,7 @@ router.post('/:id/accept', PrivyAuthMiddleware, async (req: Request, res: Respon
 router.get('/:id', PrivyAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const challengeId = parseInt(req.params.id);
+    console.log(`[GET /api/challenges/:id] Fetching challenge ID: ${req.params.id}, parsed as: ${challengeId}`);
 
     // Get from database
     const dbChallenge = await db
@@ -1055,6 +1076,7 @@ router.get('/:id', PrivyAuthMiddleware, async (req: Request, res: Response) => {
       .limit(1);
 
     if (!dbChallenge.length) {
+      console.log(`[GET /api/challenges/:id] Challenge ID ${challengeId} not found in database`);
       return res.status(404).json({ error: 'Challenge not found' });
     }
 

@@ -542,7 +542,7 @@ export function ChallengeCard({
             )}
             <div className="min-w-0 flex-1">
               <button
-                onClick={() => navigate(`/challenges/${challenge.id}/activity`)}
+                onClick={() => navigate(`/challenges/${challenge.id}`)}
                 className="font-bold text-xs md:text-sm text-slate-900 dark:text-slate-100 break-words whitespace-normal mb-0 hover:text-primary dark:hover:text-primary/80 transition-colors text-left w-full"
                 data-testid="link-challenge-detail"
               >
