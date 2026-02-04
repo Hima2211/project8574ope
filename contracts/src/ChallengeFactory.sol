@@ -24,7 +24,8 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
     
     // Enums
     enum ChallengeType { GROUP, P2P }
-    enum ChallengeStatus { CREATED, ACTIVE, RESOLVED, CLAIMED, CANCELLED }
+    enum ChallengeStatus { CREATED, AWAITING_CREATOR_STAKE, ACTIVE, RESOLVED, CLAIMED, CANCELLED, DISPUTED, REFUNDED }
+    enum Side { YES, NO }
     
     // Structs
     struct Challenge {
@@ -40,6 +41,14 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
         uint256 createdAt;
         uint256 resolvedAt;
         string metadataURI;           // IPFS hash or JSON
+        // New P2P fields for Open Challenges
+        Side creatorSide;             // YES or NO chosen by creator
+        Side participantSide;         // YES or NO chosen by acceptor (opposite of creator)
+        bool creatorStaked;           // Whether creator locked their stake
+        bool participantStaked;       // Whether participant locked their stake
+        uint256 stakedAt;             // When both were staked
+        uint256 refundRequestedAt;    // When refund was requested
+        bool refundAccepted;          // Whether refund was mutually accepted
     }
     
     struct GroupChallengeParticipant {
@@ -80,6 +89,46 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
         address paymentToken,
         uint256 stakeAmount,
         uint256 pointsReward
+    );
+    
+    event CreatorStakeLocked(
+        uint256 indexed challengeId,
+        address indexed creator,
+        uint256 stakeAmount
+    );
+    
+    event ParticipantStakeLocked(
+        uint256 indexed challengeId,
+        address indexed participant,
+        uint256 stakeAmount
+    );
+    
+    event RefundRequested(
+        uint256 indexed challengeId,
+        address indexed requester,
+        string reason
+    );
+    
+    event RefundAccepted(
+        uint256 indexed challengeId,
+        address indexed acceptor
+    );
+    
+    event RefundDeclined(
+        uint256 indexed challengeId,
+        address indexed decliner
+    );
+    
+    event StakesRefunded(
+        uint256 indexed challengeId,
+        address indexed creator,
+        address indexed participant,
+        uint256 refundAmount
+    );
+    
+    event AdminForcedRefund(
+        uint256 indexed challengeId,
+        string reason
     );
     
     event ChallengeResolved(
@@ -167,11 +216,13 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
      * User A (caller) stakes paymentToken (can be ETH via msg.value or ERC20)
      * If participant = address(0): Open challenge (anyone can accept)
      * If participant != address(0): Direct P2P (only participant can accept)
+     * creatorSide: 0 = YES, 1 = NO
      */
     function createP2PChallenge(
         address participant,
         address paymentToken,
         uint256 stakeAmount,
+        uint256 creatorSide,
         uint256 pointsReward,
         string calldata metadataURI
     ) external payable nonReentrant returns (uint256) {
@@ -180,6 +231,7 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
         if (participant != address(0)) {
             require(participant != msg.sender, "Cannot challenge yourself");
         }
+        require(creatorSide == 0 || creatorSide == 1, "Invalid side");
         require(!blacklistedTokens[paymentToken], "Token is blacklisted");
         require(stakeAmount > 0, "Stake must be > 0");
         require(pointsReward > 0, "Points reward must be > 0");
@@ -205,12 +257,27 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
         newChallenge.paymentToken = paymentToken;
         newChallenge.stakeAmount = stakeAmount;
         newChallenge.pointsReward = pointsReward;
-        newChallenge.status = ChallengeStatus.CREATED;
+        newChallenge.creatorSide = Side(creatorSide);
+        newChallenge.status = participant == address(0) ? ChallengeStatus.CREATED : ChallengeStatus.CREATED;
         newChallenge.createdAt = block.timestamp;
         newChallenge.metadataURI = metadataURI;
+        newChallenge.creatorStaked = false;
+        newChallenge.participantStaked = false;
         
-        // Lock creator's stake in escrow
-        stakeEscrow.lockStake(msg.sender, paymentToken, stakeAmount, challengeId);
+        // For open challenges: creator doesn't lock stake yet
+        // For direct P2P: creator locks stake immediately
+        if (participant != address(0)) {
+            // Direct P2P: lock creator's stake now
+            stakeEscrow.lockStake(msg.sender, paymentToken, stakeAmount, challengeId);
+            newChallenge.creatorStaked = true;
+            emit CreatorStakeLocked(challengeId, msg.sender, stakeAmount);
+        } else {
+            // Open challenge: creator will lock stake later via acceptP2PChallenge
+            // For now, transfer is received but stake is not locked
+            stakeEscrow.lockStake(msg.sender, paymentToken, stakeAmount, challengeId);
+            newChallenge.creatorStaked = true;
+            emit CreatorStakeLocked(challengeId, msg.sender, stakeAmount);
+        }
         
         emit ChallengeCreatedP2P(
             challengeId,
@@ -228,14 +295,20 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
      * @dev Accept a P2P challenge (User B stakes matching amount)
      * For direct P2P: msg.sender must be the specified participant
      * For open challenge: msg.sender can be anyone (becomes the participant)
+     * participantSide: Must be opposite of creatorSide
      * Can stake with ETH (msg.value) or ERC20 token
      */
-    function acceptP2PChallenge(uint256 challengeId) external payable nonReentrant {
+    function acceptP2PChallenge(uint256 challengeId, uint256 participantSide) external payable nonReentrant {
         Challenge storage challenge = challenges[challengeId];
         
         require(challenge.challengeType == ChallengeType.P2P, "Not P2P challenge");
         require(challenge.status == ChallengeStatus.CREATED, "Challenge not open");
         require(msg.sender != challenge.creator, "Creator cannot accept own challenge");
+        require(participantSide == 0 || participantSide == 1, "Invalid side");
+        
+        // Verify participantSide is opposite of creatorSide
+        uint256 creatorSideVal = challenge.creatorSide == Side.YES ? 0 : 1;
+        require(participantSide != creatorSideVal, "Must choose opposite side from creator");
         
         // For direct P2P challenges: verify msg.sender is the specified participant
         if (challenge.participant != address(0)) {
@@ -259,6 +332,9 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
             );
         }
         
+        // Set participant side
+        challenge.participantSide = Side(participantSide);
+        
         // Lock participant's stake
         stakeEscrow.lockStake(
             msg.sender,
@@ -267,7 +343,167 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
             challengeId
         );
         
+        challenge.participantStaked = true;
+        
+        // For open challenges: move to AWAITING_CREATOR_STAKE
+        // Creator needs to lock their stake after acceptor accepts
+        if (challenge.creatorSide == challenge.participantSide) {
+            // This should never happen due to validation above
+            revert("Invalid side configuration");
+        }
+        
+        challenge.status = ChallengeStatus.AWAITING_CREATOR_STAKE;
+        
+        emit ParticipantStakeLocked(challengeId, msg.sender, challenge.stakeAmount);
+    }
+    
+    /**
+     * @dev Lock creator's stake for open challenges after acceptor has accepted
+     * Transitions challenge from AWAITING_CREATOR_STAKE to ACTIVE
+     * Both stakes are now locked and challenge can begin
+     */
+    function lockCreatorStake(uint256 challengeId) external payable nonReentrant {
+        Challenge storage challenge = challenges[challengeId];
+        
+        require(challenge.challengeType == ChallengeType.P2P, "Not P2P challenge");
+        require(challenge.status == ChallengeStatus.AWAITING_CREATOR_STAKE, "Invalid status");
+        require(msg.sender == challenge.creator, "Only creator can lock stake");
+        require(!challenge.creatorStaked, "Creator already staked");
+        require(challenge.participantStaked, "Participant has not staked yet");
+        
+        // Handle ETH vs ERC20
+        if (challenge.paymentToken == address(0)) {
+            // Native ETH - check msg.value matches stakeAmount
+            require(msg.value == challenge.stakeAmount, "ETH amount mismatch");
+        } else {
+            // ERC20 token - transfer from creator to escrow
+            require(msg.value == 0, "Do not send ETH for ERC20");
+            IERC20(challenge.paymentToken).safeTransferFrom(
+                msg.sender,
+                address(stakeEscrow),
+                challenge.stakeAmount
+            );
+        }
+        
+        // Lock creator's stake
+        stakeEscrow.lockStake(
+            msg.sender,
+            challenge.paymentToken,
+            challenge.stakeAmount,
+            challengeId
+        );
+        
+        // Both stakes now locked - challenge is fully active
+        challenge.creatorStaked = true;
+        challenge.stakedAt = block.timestamp;
         challenge.status = ChallengeStatus.ACTIVE;
+        
+        emit CreatorStakeLocked(challengeId, msg.sender, challenge.stakeAmount);
+    }
+    
+    /**
+     * @dev Request a mutual refund for a challenge
+     * Only available when both stakes are locked (ACTIVE or DISPUTED status)
+     * Sets challenge to DISPUTED status and records request time
+     */
+    function requestRefund(uint256 challengeId, string calldata reason) external nonReentrant {
+        Challenge storage challenge = challenges[challengeId];
+        
+        require(challenge.challengeType == ChallengeType.P2P, "Not P2P challenge");
+        require(challenge.creatorStaked && challenge.participantStaked, "Both must have staked");
+        require(
+            challenge.status == ChallengeStatus.ACTIVE || challenge.status == ChallengeStatus.DISPUTED,
+            "Invalid status"
+        );
+        require(
+            msg.sender == challenge.creator || msg.sender == challenge.participant,
+            "Only participants can request refund"
+        );
+        
+        if (challenge.status == ChallengeStatus.ACTIVE) {
+            challenge.status = ChallengeStatus.DISPUTED;
+            challenge.refundRequestedAt = block.timestamp;
+        }
+        
+        emit RefundRequested(challengeId, msg.sender, reason);
+    }
+    
+    /**
+     * @dev Accept a mutual refund request
+     * Both participants must agree - refund releases both stakes
+     * Challenge moves to REFUNDED status
+     */
+    function acceptRefund(uint256 challengeId) external nonReentrant {
+        Challenge storage challenge = challenges[challengeId];
+        
+        require(challenge.challengeType == ChallengeType.P2P, "Not P2P challenge");
+        require(challenge.status == ChallengeStatus.DISPUTED, "Challenge not disputed");
+        require(
+            msg.sender == challenge.creator || msg.sender == challenge.participant,
+            "Only participants can accept refund"
+        );
+        
+        challenge.status = ChallengeStatus.REFUNDED;
+        challenge.refundAccepted = true;
+        
+        // Release both stakes back to participants via escrow
+        uint256 refundAmount = challenge.stakeAmount;
+        stakeEscrow.refundBothStakes(
+            challengeId,
+            challenge.creator,
+            challenge.participant,
+            challenge.paymentToken,
+            refundAmount,
+            "Mutual refund agreement accepted"
+        );
+        
+        emit StakesRefunded(challengeId, challenge.creator, challenge.participant, refundAmount);
+        emit RefundAccepted(challengeId, msg.sender);
+    }
+    
+    /**
+     * @dev Decline a mutual refund request
+     * Challenge continues in DISPUTED status toward admin resolution
+     */
+    function declineRefund(uint256 challengeId) external nonReentrant {
+        Challenge storage challenge = challenges[challengeId];
+        
+        require(challenge.challengeType == ChallengeType.P2P, "Not P2P challenge");
+        require(challenge.status == ChallengeStatus.DISPUTED, "Challenge not disputed");
+        require(
+            msg.sender == challenge.creator || msg.sender == challenge.participant,
+            "Only participants can decline refund"
+        );
+        
+        // Challenge remains in DISPUTED status, awaiting admin resolution
+        emit RefundDeclined(challengeId, msg.sender);
+    }
+    
+    /**
+     * @dev Admin force refund on unresolvable disputes
+     * Only owner can call - returns both stakes to participants
+     */
+    function forceRefund(uint256 challengeId, string calldata reason) external onlyOwner nonReentrant {
+        Challenge storage challenge = challenges[challengeId];
+        
+        require(challenge.challengeType == ChallengeType.P2P, "Not P2P challenge");
+        require(challenge.status == ChallengeStatus.DISPUTED, "Challenge must be disputed");
+        
+        challenge.status = ChallengeStatus.REFUNDED;
+        
+        // Release both stakes back to participants via escrow
+        uint256 refundAmount = challenge.stakeAmount;
+        stakeEscrow.refundBothStakes(
+            challengeId,
+            challenge.creator,
+            challenge.participant,
+            challenge.paymentToken,
+            refundAmount,
+            reason
+        );
+        
+        emit StakesRefunded(challengeId, challenge.creator, challenge.participant, refundAmount);
+        emit AdminForcedRefund(challengeId, reason);
     }
     
     /**
@@ -275,8 +511,6 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
      * Winner receives:
      * - Loser's stake minus platform fee
      * - BantahPoints reward
-     */
-    function resolveChallenge(
         uint256 challengeId,
         address winner,
         bytes memory signature
@@ -285,9 +519,12 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
         
         require(
             challenge.status == ChallengeStatus.CREATED ||
-            challenge.status == ChallengeStatus.ACTIVE,
-            "Invalid status"
+            challenge.status == ChallengeStatus.ACTIVE ||
+            challenge.status == ChallengeStatus.AWAITING_CREATOR_STAKE,
+            "Cannot resolve this challenge"
         );
+        require(challenge.status != ChallengeStatus.DISPUTED, "Challenge in dispute - refund must be resolved first");
+        require(challenge.status != ChallengeStatus.REFUNDED, "Challenge already refunded");
         require(winner != address(0), "Invalid winner");
         
         // Verify admin signature

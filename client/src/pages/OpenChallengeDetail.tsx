@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { DynamicMetaTags } from "@/components/DynamicMetaTags";
-import { JoinChallengeModal } from "@/components/JoinChallengeModal";
+import { AcceptChallengeModal } from "@/components/AcceptChallengeModal";
 import { ChallengeChat } from "@/components/ChallengeChat";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,7 +30,7 @@ interface OpenChallengeDetailProps {
 
 export default function OpenChallengeDetail({ challenge }: OpenChallengeDetailProps) {
   const { user } = useAuth();
-  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [showChat, setShowChat] = useState(false);
 
   const { data: balance = 0 } = useQuery<any>({
@@ -249,7 +249,7 @@ export default function OpenChallengeDetail({ challenge }: OpenChallengeDetailPr
 
             {/* Action Button */}
             <Button
-              onClick={() => setShowJoinModal(true)}
+              onClick={() => setShowAcceptModal(true)}
               className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg"
             >
               Accept & Stake
@@ -270,24 +270,12 @@ export default function OpenChallengeDetail({ challenge }: OpenChallengeDetailPr
       </div>
 
       {/* Join Modal */}
-      {showJoinModal && (
-        <JoinChallengeModal
-          isOpen={showJoinModal}
-          onClose={() => setShowJoinModal(false)}
-          challenge={{
-            id: challenge.id,
-            title: challenge.title,
-            category: challenge.category,
-            amount: challenge.amount,
-            description: challenge.description,
-          }}
-          userBalance={
-            balance && typeof balance === "object"
-              ? (balance as any).balance
-              : typeof balance === "number"
-                ? balance
-                : 0
-          }
+      {showAcceptModal && (
+        <AcceptChallengeModal
+          isOpen={showAcceptModal}
+          onClose={() => setShowAcceptModal(false)}
+          challenge={challenge}
+          isOpenChallenge={true}
         />
       )}
 

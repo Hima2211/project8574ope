@@ -53,6 +53,15 @@ contract ChallengeEscrow is ReentrancyGuard, Ownable {
         string reason
     );
     
+    event StakesRefunded(
+        address indexed user1,
+        address indexed user2,
+        address indexed token,
+        uint256 amount,
+        uint256 challengeId,
+        string reason
+    );
+    
     event ChallengeFactoryUpdated(address indexed newFactory);
     
     // Constructor
@@ -124,7 +133,14 @@ contract ChallengeEscrow is ReentrancyGuard, Ownable {
                 
                 if (!stake.released) {
                     // Return stake to user
-                    IERC20(stake.token).safeTransfer(user, stake.amount);
+                    if (stake.token == address(0)) {
+                        // Native ETH
+                        (bool success, ) = payable(user).call{value: stake.amount}("");
+                        require(success, "ETH refund failed");
+                    } else {
+                        // ERC20 token
+                        IERC20(stake.token).safeTransfer(user, stake.amount);
+                    }
                     totalLockedByToken[user][stake.token] -= stake.amount;
                     stake.released = true;
                     
@@ -132,6 +148,49 @@ contract ChallengeEscrow is ReentrancyGuard, Ownable {
                 }
             }
         }
+    }
+    
+    /**
+     * @dev Refund both participants their stakes (mutual agreement/admin override)
+     * Called by ChallengeFactory when refund is accepted or admin forces refund
+     * Returns tokens to BOTH users equally
+     */
+    function refundBothStakes(
+        uint256 challengeId,
+        address user1,
+        address user2,
+        address token,
+        uint256 amount,
+        string calldata reason
+    ) external onlyFactory nonReentrant {
+        require(user1 != address(0) && user2 != address(0), "Invalid users");
+        require(amount > 0, "Amount must be > 0");
+        
+        // Return stakes to both users
+        if (token == address(0)) {
+            // Native ETH
+            (bool success1, ) = payable(user1).call{value: amount}("");
+            (bool success2, ) = payable(user2).call{value: amount}("");
+            require(success1 && success2, "ETH refund failed");
+        } else {
+            // ERC20 token
+            IERC20(token).safeTransfer(user1, amount);
+            IERC20(token).safeTransfer(user2, amount);
+        }
+        
+        // Update tracking
+        totalLockedByToken[user1][token] -= amount;
+        totalLockedByToken[user2][token] -= amount;
+        
+        // Mark all stakes as released
+        LockedStake[] storage stakes = challengeStakes[challengeId];
+        for (uint256 i = 0; i < stakes.length; i++) {
+            if (!stakes[i].released) {
+                stakes[i].released = true;
+            }
+        }
+        
+        emit StakesRefunded(user1, user2, token, amount, challengeId, reason);
     }
     
     /**

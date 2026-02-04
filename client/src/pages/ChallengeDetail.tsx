@@ -18,7 +18,17 @@ export default function ChallengeDetail() {
 
   const { data: challenge, isLoading, error } = useQuery({
     queryKey: [`/api/challenges/${id}`],
-    queryFn: () => apiRequest('GET', `/api/challenges/${id}`),
+    queryFn: async () => {
+      console.log("ChallengeDetail: queryFn called for id:", id);
+      try {
+        const result = await apiRequest('GET', `/api/challenges/${id}`);
+        console.log("ChallengeDetail: apiRequest returned:", result);
+        return result;
+      } catch (err) {
+        console.error("ChallengeDetail: apiRequest failed:", err);
+        throw err;
+      }
+    },
     enabled: !!id,
     retry: false,
   });

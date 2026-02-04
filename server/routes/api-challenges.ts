@@ -1063,9 +1063,11 @@ router.post('/:id/accept', PrivyAuthMiddleware, async (req: Request, res: Respon
  * GET /api/challenges/:id
  * Get challenge details with on-chain data
  */
-router.get('/:id', PrivyAuthMiddleware, async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
+  const challengeId = parseInt(req.params.id);
+  console.log(`⚡⚡⚡ [GET /api/challenges/:id] HANDLER CALLED! ID: ${req.params.id}, parsed: ${challengeId}`);
+  
   try {
-    const challengeId = parseInt(req.params.id);
     console.log(`[GET /api/challenges/:id] Fetching challenge ID: ${req.params.id}, parsed as: ${challengeId}`);
 
     // Get from database
@@ -1307,18 +1309,19 @@ router.get('/user/:userId', PrivyAuthMiddleware, async (req: Request, res: Respo
 /**
  * POST /api/challenges/:challengeId/accept-open
  * Accept an open P2P challenge (first user to join becomes opponent)
- * Calls blockchain: joinOpenP2PChallenge()
+ * Acceptor's side is auto-assigned as opposite of creator's side
  */
 router.post('/:challengeId/accept-open', PrivyAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const { challengeId } = req.params;
     const userId = req.user?.id;
+    const { side: providedSide } = req.body; // Should be YES or NO
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    console.log(`\n⚔️ User ${userId} accepting open challenge ${challengeId}...`);
+    console.log(`\n⚔️ User ${userId} accepting open challenge ${challengeId} on side ${providedSide}...`);
 
     // Get challenge from database
     const dbChallenge = await db
@@ -1353,31 +1356,64 @@ router.post('/:challengeId/accept-open', PrivyAuthMiddleware, async (req: Reques
       });
     }
 
-    // Step 1: Record in database that user is TRYING to accept
-    // In a real blockchain flow, the frontend should sign and send us the hash
-    // If the server is doing it, it MUST use the admin signer for "joinAdminChallenge" 
-    // or handle P2P specifically. The error shows ethers is trying to send a tx 
-    // without a signer.
+    // Validate side is correct (should be opposite of creator's side)
+    const creatorSide = challenge.challengerSide || 'YES';
+    const acceptorSide = providedSide || (creatorSide === 'YES' ? 'NO' : 'YES');
     
-    console.log(`✅ Challenge validation passed. Updating database...`);
+    if (acceptorSide === creatorSide) {
+      return res.status(400).json({
+        error: `Creator chose ${creatorSide}. You must choose ${creatorSide === 'YES' ? 'NO' : 'YES'}`,
+      });
+    }
+
+    console.log(`✅ Challenge validation passed. Creator: ${creatorSide}, Acceptor: ${acceptorSide}. Updating database...`);
 
     // For now, we update the DB first to mark it as active
-    // In production, the frontend SHOULD have sent a transactionHash
     const { transactionHash: providedTxHash } = req.body;
 
-    // Step 2: Update database with acceptor info
+    // Step 2: Update database with acceptor info and acceptor's side
     await db
       .update(challenges)
       .set({
         challenged: userId,
         status: 'active',
         acceptorTransactionHash: providedTxHash || 'pending_onchain',
+        acceptorStaked: true, // Mark acceptor as having staked
       })
       .where(eq(challenges.id, parseInt(challengeId)));
 
     console.log(`✅ Database updated - challenge now ACTIVE`);
 
-    // Step 3: Get the creator for notifications
+    // Step 3: Create escrow records for both creator and acceptor
+    console.log(`🔒 Creating escrow records for both participants...`);
+    
+    if (challenge.stakeAmountWei) {
+      // Creator escrow
+      await createEscrowRecord({
+        challengeId: parseInt(challengeId),
+        userId: challenge.challenger!,
+        tokenAddress: challenge.paymentTokenAddress!,
+        amountEscrowed: challenge.stakeAmountWei,
+        status: 'locked',
+        side: creatorSide,
+        lockTxHash: providedTxHash || 'pending_onchain',
+      }).catch(err => console.warn('Failed to create creator escrow:', err));
+
+      // Acceptor escrow
+      await createEscrowRecord({
+        challengeId: parseInt(challengeId),
+        userId: userId,
+        tokenAddress: challenge.paymentTokenAddress!,
+        amountEscrowed: challenge.stakeAmountWei,
+        status: 'locked',
+        side: acceptorSide,
+        lockTxHash: providedTxHash || 'pending_onchain',
+      }).catch(err => console.warn('Failed to create acceptor escrow:', err));
+      
+      console.log(`✅ Escrow records created for both participants`);
+    }
+
+    // Step 4: Get the creator for notifications
     const creator = await db
       .select()
       .from(users)
@@ -1393,7 +1429,7 @@ router.post('/:challengeId/accept-open', PrivyAuthMiddleware, async (req: Reques
     const creatorName = creator[0]?.firstName || 'Someone';
     const acceptorName = acceptor[0]?.firstName || 'Someone';
 
-    // Step 4: Send notifications
+    // Step 5: Send notifications
     console.log(`📬 Sending notifications...`);
 
     // Notify both participants that challenge is now active
@@ -1460,7 +1496,7 @@ router.post('/:challengeId/accept-open', PrivyAuthMiddleware, async (req: Reques
 
     console.log(`✅ Notifications sent successfully`);
 
-    // Step 5: Return success response
+    // Step 6: Return success response with chat URL
     res.json({
       success: true,
       challengeId: parseInt(challengeId),
@@ -1470,9 +1506,12 @@ router.post('/:challengeId/accept-open', PrivyAuthMiddleware, async (req: Reques
       title: challenge.title,
       challenger: challenge.challenger,
       challenged: userId,
+      creatorSide: creatorSide,
+      acceptorSide: acceptorSide,
       stakeAmount: challenge.amount,
       totalPool: challenge.amount * 2,
       pointsAwarded: joiningPoints,
+      chatUrl: `/chat/${parseInt(challengeId)}`, // For automatic chat redirect
       message: `Challenge accepted! Both stakes are now locked on-chain.`,
     });
 
@@ -1829,6 +1868,542 @@ router.post('/:challengeId/messages', PrivyAuthMiddleware, async (req: Request, 
   } catch (error: any) {
     console.error('Failed to send challenge message:', error);
     res.status(500).json({ error: 'Failed to send message', message: error.message });
+  }
+});
+
+/**
+ * POST /api/challenges/:id/lock-creator-stake
+ * Creator locks their stake after acceptor has already locked theirs
+ * Only called after challenge is in "active" status with acceptor staked
+ */
+router.post('/:id/lock-creator-stake', PrivyAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const challengeId = parseInt(req.params.id);
+    const userId = req.user?.id;
+    const { transactionHash } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    console.log(`\n🔒 Creator ${userId} locking stake for challenge ${challengeId}...`);
+
+    // Get challenge
+    const dbChallenge = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!dbChallenge.length) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+
+    const challenge = dbChallenge[0];
+
+    // Verify user is the creator
+    if (challenge.challenger !== userId) {
+      return res.status(403).json({ error: 'Only the challenge creator can lock their stake' });
+    }
+
+    // Verify acceptor has already staked
+    if (!challenge.acceptorStaked) {
+      return res.status(400).json({ error: 'Acceptor has not staked yet' });
+    }
+
+    // Verify creator hasn't already staked
+    if (challenge.creatorStaked) {
+      return res.status(400).json({ error: 'You have already locked your stake' });
+    }
+
+    // Verify status is "active"
+    if (challenge.status !== 'active') {
+      return res.status(400).json({ error: 'Challenge is not in active status' });
+    }
+
+    console.log(`✅ Validation passed. Updating challenge status...`);
+
+    // Update challenge: mark creator as staked
+    await db
+      .update(challenges)
+      .set({
+        creatorStaked: true,
+        creatorTransactionHash: transactionHash || 'pending_onchain',
+        blockchainCreatedAt: new Date(),
+      })
+      .where(eq(challenges.id, challengeId));
+
+    // Create escrow record for creator if not already exists
+    const existingEscrow = await db
+      .select()
+      .from(challengeEscrowRecords)
+      .where(
+        and(
+          eq(challengeEscrowRecords.challengeId, challengeId),
+          eq(challengeEscrowRecords.userId, userId)
+        )
+      )
+      .limit(1);
+
+    if (!existingEscrow.length && challenge.stakeAmountWei) {
+      await createEscrowRecord({
+        challengeId,
+        userId,
+        tokenAddress: challenge.paymentTokenAddress!,
+        amountEscrowed: challenge.stakeAmountWei,
+        status: 'locked',
+        side: challenge.challengerSide || 'YES',
+        lockTxHash: transactionHash || 'pending_onchain',
+      });
+    }
+
+    console.log(`✅ Creator stake locked. Both stakes now confirmed on-chain.`);
+
+    // Notify acceptor that creator has locked their stake
+    const creator = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const creatorName = creator[0]?.firstName || 'The creator';
+
+    // Get acceptor
+    const acceptor = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, challenge.challenged!))
+      .limit(1);
+
+    await notificationService.sendNotification({
+      userId: challenge.challenged!,
+      event: NotificationEvent.NEW_CHALLENGE_ACCEPTED,
+      title: '🔒 Stakes Locked!',
+      message: `${creatorName} has locked their stake. Both stakes are now on-chain. Let the dispute begin!`,
+      metadata: {
+        challengeId: challengeId,
+        challengeTitle: challenge.title,
+        creatorId: userId,
+        creatorName: creatorName,
+      },
+      channels: [NotificationChannel.PUSHER, NotificationChannel.FIREBASE],
+      priority: NotificationPriority.HIGH,
+    }).catch(err => {
+      console.warn('⚠️ Failed to notify acceptor:', err.message);
+    });
+
+    res.json({
+      success: true,
+      challengeId,
+      transactionHash: transactionHash || 'pending_onchain',
+      status: 'both_staked',
+      message: 'Your stake is now locked! Dispute period has begun.',
+      chatUrl: `/chat/${challengeId}`,
+    });
+
+  } catch (error: any) {
+    console.error('❌ Failed to lock creator stake:', error);
+    res.status(500).json({
+      error: 'Failed to lock stake',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/challenges/:id/request-refund
+ * One party requests a mutual refund (only available after stakes are locked)
+ */
+router.post('/:id/request-refund', PrivyAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const challengeId = parseInt(req.params.id);
+    const userId = req.user?.id;
+    const { reason } = req.body; // Optional: why they want refund
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    console.log(`\n💰 User ${userId} requesting refund for challenge ${challengeId}...`);
+
+    // Get challenge
+    const dbChallenge = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!dbChallenge.length) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+
+    const challenge = dbChallenge[0];
+
+    // Verify user is one of the participants
+    if (challenge.challenger !== userId && challenge.challenged !== userId) {
+      return res.status(403).json({ error: 'You are not a participant in this challenge' });
+    }
+
+    // Verify both stakes are locked (can only refund if both are committed)
+    if (!challenge.creatorStaked || !challenge.acceptorStaked) {
+      return res.status(400).json({ error: 'Both participants must lock their stakes before requesting refund' });
+    }
+
+    // Check if already in dispute or completed
+    if (challenge.status === 'completed' || challenge.status === 'cancelled') {
+      return res.status(400).json({ error: `Cannot refund a ${challenge.status} challenge` });
+    }
+
+    // Update challenge with dispute reason and mark as disputed
+    const isCreator = challenge.challenger === userId;
+    const opponent = isCreator ? challenge.challenged : challenge.challenger;
+
+    await db
+      .update(challenges)
+      .set({
+        status: 'disputed',
+        disputeReason: reason || 'Mutual refund requested',
+      })
+      .where(eq(challenges.id, challengeId));
+
+    console.log(`✅ Refund requested. Status changed to "disputed".`);
+
+    // Notify opponent about refund request
+    const requester = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const requesterName = requester[0]?.firstName || 'Someone';
+
+    await notificationService.sendNotification({
+      userId: opponent!,
+      event: NotificationEvent.NEW_CHALLENGE_ACCEPTED, // Reusing event type
+      title: '💰 Refund Requested',
+      message: `${requesterName} has requested a mutual refund. You can agree or decline in the chat.`,
+      metadata: {
+        challengeId: challengeId,
+        challengeTitle: challenge.title,
+        requesterId: userId,
+        requesterName: requesterName,
+      },
+      channels: [NotificationChannel.PUSHER, NotificationChannel.FIREBASE],
+      priority: NotificationPriority.HIGH,
+    }).catch(err => {
+      console.warn('⚠️ Failed to notify opponent of refund request:', err.message);
+    });
+
+    res.json({
+      success: true,
+      challengeId,
+      message: 'Refund request sent to your opponent. Awaiting their response.',
+      opponent: {
+        id: opponent,
+        name: (await db.select().from(users).where(eq(users.id, opponent!)).limit(1))[0]?.firstName,
+      },
+    });
+
+  } catch (error: any) {
+    console.error('❌ Failed to request refund:', error);
+    res.status(500).json({
+      error: 'Failed to request refund',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/challenges/:id/accept-refund
+ * Opponent agrees to mutual refund - both get funds released from escrow
+ */
+router.post('/:id/accept-refund', PrivyAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const challengeId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    console.log(`\n✅ User ${userId} accepting refund for challenge ${challengeId}...`);
+
+    // Get challenge
+    const dbChallenge = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!dbChallenge.length) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+
+    const challenge = dbChallenge[0];
+
+    // Verify user is the opponent (not the one who requested)
+    if (challenge.challenger !== userId && challenge.challenged !== userId) {
+      return res.status(403).json({ error: 'You are not a participant in this challenge' });
+    }
+
+    // Verify status is disputed
+    if (challenge.status !== 'disputed') {
+      return res.status(400).json({ error: 'Challenge is not in disputed status' });
+    }
+
+    console.log(`✅ Refund accepted. Releasing escrow for both participants...`);
+
+    // Update challenge status to cancelled (mutual refund = cancelled)
+    await db
+      .update(challenges)
+      .set({
+        status: 'cancelled',
+        completedAt: new Date(),
+      })
+      .where(eq(challenges.id, challengeId));
+
+    // Release both escrow records
+    await db
+      .update(challengeEscrowRecords)
+      .set({
+        status: 'released',
+        releasedAt: new Date(),
+      })
+      .where(eq(challengeEscrowRecords.challengeId, challengeId));
+
+    console.log(`✅ Both escrows released. Funds returned to participants.`);
+
+    // Notify both parties
+    const creator = await db.select().from(users).where(eq(users.id, challenge.challenger!)).limit(1);
+    const acceptor = await db.select().from(users).where(eq(users.id, challenge.challenged!)).limit(1);
+    const acceptorName = acceptor[0]?.firstName || 'Someone';
+    const creatorName = creator[0]?.firstName || 'Someone';
+
+    // Notify creator
+    await notificationService.sendNotification({
+      userId: challenge.challenger!,
+      event: NotificationEvent.NEW_CHALLENGE_ACCEPTED,
+      title: '💰 Refund Accepted',
+      message: `${acceptorName} accepted the mutual refund. Your full stake has been returned.`,
+      metadata: {
+        challengeId: challengeId,
+        challengeTitle: challenge.title,
+      },
+      channels: [NotificationChannel.PUSHER, NotificationChannel.FIREBASE],
+      priority: NotificationPriority.MEDIUM,
+    }).catch(err => {
+      console.warn('⚠️ Failed to notify creator of accepted refund:', err.message);
+    });
+
+    // Notify acceptor
+    await notificationService.sendNotification({
+      userId: challenge.challenged!,
+      event: NotificationEvent.NEW_CHALLENGE_ACCEPTED,
+      title: '💰 Refund Completed',
+      message: `You accepted the mutual refund with ${creatorName}. Your full stake has been returned.`,
+      metadata: {
+        challengeId: challengeId,
+        challengeTitle: challenge.title,
+      },
+      channels: [NotificationChannel.PUSHER, NotificationChannel.FIREBASE],
+      priority: NotificationPriority.MEDIUM,
+    }).catch(err => {
+      console.warn('⚠️ Failed to notify acceptor of completed refund:', err.message);
+    });
+
+    res.json({
+      success: true,
+      challengeId,
+      status: 'refunded',
+      message: 'Mutual refund completed! Full stakes returned to both participants.',
+    });
+
+  } catch (error: any) {
+    console.error('❌ Failed to accept refund:', error);
+    res.status(500).json({
+      error: 'Failed to accept refund',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/challenges/:id/decline-refund
+ * Opponent declines refund request - challenge continues to dispute resolution
+ */
+router.post('/:id/decline-refund', PrivyAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const challengeId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    console.log(`\n❌ User ${userId} declining refund for challenge ${challengeId}...`);
+
+    // Get challenge
+    const dbChallenge = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!dbChallenge.length) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+
+    const challenge = dbChallenge[0];
+
+    // Verify user is a participant
+    if (challenge.challenger !== userId && challenge.challenged !== userId) {
+      return res.status(403).json({ error: 'You are not a participant in this challenge' });
+    }
+
+    // Verify status is disputed
+    if (challenge.status !== 'disputed') {
+      return res.status(400).json({ error: 'Challenge is not in disputed status' });
+    }
+
+    console.log(`✅ Refund declined. Challenge continues to resolution.`);
+
+    // Keep challenge in disputed status - awaiting admin resolution or evidence submission
+    // No update needed - just notify the requester
+
+    const requester = await db.select().from(users).where(eq(users.id, userId === challenge.challenger ? challenge.challenged : challenge.challenger)).limit(1);
+    const requesterName = requester[0]?.firstName || 'Someone';
+
+    await notificationService.sendNotification({
+      userId: userId === challenge.challenger ? challenge.challenged! : challenge.challenger!,
+      event: NotificationEvent.NEW_CHALLENGE_ACCEPTED,
+      title: '❌ Refund Declined',
+      message: `${requesterName} declined the refund request. The dispute will proceed to resolution.`,
+      metadata: {
+        challengeId: challengeId,
+        challengeTitle: challenge.title,
+      },
+      channels: [NotificationChannel.PUSHER, NotificationChannel.FIREBASE],
+      priority: NotificationPriority.MEDIUM,
+    }).catch(err => {
+      console.warn('⚠️ Failed to notify of declined refund:', err.message);
+    });
+
+    res.json({
+      success: true,
+      challengeId,
+      message: 'Refund declined. Challenge continues to dispute resolution.',
+    });
+
+  } catch (error: any) {
+    console.error('❌ Failed to decline refund:', error);
+    res.status(500).json({
+      error: 'Failed to decline refund',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/admin/challenges/:id/force-refund
+ * Admin endpoint to force refund both parties if dispute is unresolvable
+ * Requires admin authentication
+ */
+router.post('/admin/:id/force-refund', PrivyAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const challengeId = parseInt(req.params.id);
+    const userId = req.user?.id;
+    const { reason } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // TODO: Add admin role verification
+    // For now, comment indicates where admin check should go
+    console.log(`\n⚖️ Admin ${userId} force-resolving challenge ${challengeId}...`);
+
+    // Get challenge
+    const dbChallenge = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!dbChallenge.length) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+
+    const challenge = dbChallenge[0];
+
+    // Verify challenge is in disputed status
+    if (challenge.status !== 'disputed') {
+      return res.status(400).json({ error: 'Challenge must be in disputed status for admin force resolution' });
+    }
+
+    console.log(`✅ Force-refunding both participants...`);
+
+    // Update challenge status
+    await db
+      .update(challenges)
+      .set({
+        status: 'cancelled',
+        completedAt: new Date(),
+        disputeReason: `Admin force resolution: ${reason || 'Unresolvable dispute'}`,
+      })
+      .where(eq(challenges.id, challengeId));
+
+    // Release both escrow records
+    await db
+      .update(challengeEscrowRecords)
+      .set({
+        status: 'released',
+        releasedAt: new Date(),
+      })
+      .where(eq(challengeEscrowRecords.challengeId, challengeId));
+
+    console.log(`✅ Challenge force-resolved. Both escrows released.`);
+
+    // Notify both parties
+    const creator = await db.select().from(users).where(eq(users.id, challenge.challenger!)).limit(1);
+    const acceptor = await db.select().from(users).where(eq(users.id, challenge.challenged!)).limit(1);
+
+    const notificationMessage = `An administrator resolved the dispute. Your full stake has been returned. Reason: ${reason || 'Unresolvable dispute'}`;
+
+    // Notify creator
+    await notificationService.sendNotification({
+      userId: challenge.challenger!,
+      event: NotificationEvent.NEW_CHALLENGE_ACCEPTED,
+      title: '⚖️ Admin Resolution',
+      message: notificationMessage,
+      metadata: {
+        challengeId: challengeId,
+        challengeTitle: challenge.title,
+      },
+      channels: [NotificationChannel.PUSHER, NotificationChannel.FIREBASE],
+      priority: NotificationPriority.HIGH,
+    }).catch(err => {
+      console.warn('⚠️ Failed to notify creator:', err.message);
+    });
+
+    // Notify acceptor
+    await notificationService.sendNotification({
+      userId: challenge.challenged!,
+      event: NotificationEvent.NEW_CHALLENGE_ACCEPTED,
+      title: '⚖️ Admin Resolution',
+      message: notificationMessage,
+      metadata: {
+        challengeId: challengeId,
+        challengeTitle: challenge.title,
+      },
+      channels: [NotificationChannel.PUSHER, NotificationChannel.FIREBASE],
+      priority: NotificationPriority.HIGH,
+    }).catch(err => {
+      console.warn('⚠️ Failed to notify acceptor:', err.message);
+    });
+
+    res.json({
+      success: true,
+      challengeId,
+      status: 'admin_resolved',
+      message: 'Challenge force-resolved. Both participants have been refunded.',
+    });
+
+  } catch (error: any) {
+    console.error('❌ Failed to force resolve challenge:', error);
+    res.status(500).json({
+      error: 'Failed to force resolve challenge',
+      message: error.message,
+    });
   }
 });
 

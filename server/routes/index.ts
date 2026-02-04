@@ -34,7 +34,9 @@ export function registerBlockchainRoutes(app: express.Application) {
    * GET /api/challenges - List challenges
    * GET /api/challenges/user/:userId - Get user's challenges
    */
+  console.log('📋 Mounting /api/challenges router');
   app.use('/api/challenges', apiChallengesRouter);
+  console.log('✅ /api/challenges router mounted');
 
   /**
    * Payout Operations

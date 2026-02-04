@@ -43,6 +43,7 @@ export async function setupVite(app: Express, server: Server) {
   // Skip Vite middleware for API routes
   app.use((req, res, next) => {
     if (req.path.startsWith('/api/')) {
+      console.log(`[Vite Middleware] Skipping for API route: ${req.method} ${req.path}`);
       next();
     } else {
       vite.middlewares(req, res, next);
@@ -50,8 +51,11 @@ export async function setupVite(app: Express, server: Server) {
   });
   
   app.use("*", async (req, res, next) => {
+    console.log(`[Vite Catch-all] Handling: ${req.method} ${req.path}`);
+    
     // Skip this catch-all for API routes
     if (req.path.startsWith('/api/')) {
+      console.log(`[Vite Catch-all] Skipping API route: ${req.method} ${req.path}`);
       return next();
     }
 

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Send, Upload, AlertCircle, Clock, Shield, MessageCircle, Users, FileUp } from "lucide-react";
+import { Send, Upload, AlertCircle, Clock, Shield, MessageCircle, Users, FileUp, DollarSign } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -70,6 +70,10 @@ export function ChallengeChat({ challenge, onClose }: ChallengeChatProps) {
   const [message, setMessage] = useState("");
   const [showDispute, setShowDispute] = useState(false);
   const [showEvidenceUpload, setShowEvidenceUpload] = useState(false);
+  const [showRefundRequest, setShowRefundRequest] = useState(false);
+  const [showRefundDecision, setShowRefundDecision] = useState(false);
+  const [refundRequested, setRefundRequested] = useState(false);
+  const [refundRequestedBy, setRefundRequestedBy] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -131,6 +135,56 @@ export function ChallengeChat({ challenge, onClose }: ChallengeChatProps) {
         description: "Admin has been notified. Challenge is now under review.",
       });
       setShowDispute(false);
+    },
+  });
+
+  const requestRefundMutation = useMutation({
+    mutationFn: async (reason?: string) => {
+      return await apiRequest("POST", `/api/challenges/${challenge.id}/request-refund`, { reason });
+    },
+    onSuccess: () => {
+      setRefundRequested(true);
+      setShowRefundRequest(false);
+      toast({
+        title: "Refund Requested",
+        description: "Your opponent will be notified. Awaiting their response...",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to request refund",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const acceptRefundMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", `/api/challenges/${challenge.id}/accept-refund`);
+    },
+    onSuccess: () => {
+      setShowRefundDecision(false);
+      toast({
+        title: "✅ Refund Accepted",
+        description: "Both stakes have been returned. Challenge cancelled.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/challenges"] });
+      setTimeout(() => onClose(), 2000);
+    },
+  });
+
+  const declineRefundMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", `/api/challenges/${challenge.id}/decline-refund`);
+    },
+    onSuccess: () => {
+      setShowRefundDecision(false);
+      setRefundRequested(false);
+      toast({
+        title: "Refund Declined",
+        description: "Challenge continues to dispute resolution.",
+      });
     },
   });
 
@@ -330,6 +384,27 @@ export function ChallengeChat({ challenge, onClose }: ChallengeChatProps) {
                 <AlertCircle className="w-4 h-4 mr-1" />
                 Dispute
               </Button>
+              {challenge.status === 'disputed' && !refundRequested && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowRefundRequest(true)}
+                  className="text-green-600 border-green-600 hover:bg-green-50"
+                >
+                  <DollarSign className="w-4 h-4 mr-1" />
+                  Request Refund
+                </Button>
+              )}
+              {challenge.status === 'disputed' && refundRequested && (
+                <Button
+                  size="sm"
+                  onClick={() => setShowRefundDecision(true)}
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  <DollarSign className="w-4 h-4 mr-1" />
+                  Refund Pending
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -499,6 +574,70 @@ export function ChallengeChat({ challenge, onClose }: ChallengeChatProps) {
           queryClient.invalidateQueries({ queryKey: [`/api/challenges/${challenge.id}`] });
         }}
       />
+
+      {/* Request Refund Dialog */}
+      <Dialog open={showRefundRequest} onOpenChange={setShowRefundRequest}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Mutual Refund</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-900 dark:text-blue-300">
+                💡 Both participants must agree to receive refunds. If your opponent declines, the dispute will continue to admin resolution.
+              </p>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Your opponent will be notified and can choose to accept or decline the refund.
+            </p>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowRefundRequest(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => requestRefundMutation.mutate()}
+                disabled={requestRefundMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {requestRefundMutation.isPending ? "Sending..." : "Request Refund"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Refund Decision Dialog (when opponent requests refund) */}
+      <Dialog open={showRefundDecision} onOpenChange={setShowRefundDecision}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>⏳ Refund Request Pending</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
+              <p className="text-sm text-amber-900 dark:text-amber-300">
+                Your opponent has requested a mutual refund. You can accept to receive your full stake back, or decline to continue with dispute resolution.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Button 
+                onClick={() => declineRefundMutation.mutate()}
+                disabled={declineRefundMutation.isPending}
+                variant="outline"
+                className="text-red-600 border-red-600"
+              >
+                {declineRefundMutation.isPending ? "Declining..." : "Decline"}
+              </Button>
+              <Button 
+                onClick={() => acceptRefundMutation.mutate()}
+                disabled={acceptRefundMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {acceptRefundMutation.isPending ? "Accepting..." : "Accept Refund"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
   </div>
 );
 }
