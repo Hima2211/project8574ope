@@ -34,6 +34,7 @@ import { useState } from "react";
 import ProfileCard from "@/components/ProfileCard";
 import ConfirmAndStakeButton from '@/components/ConfirmAndStakeButton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AcceptChallengeModal } from "@/components/AcceptChallengeModal";
 
 // Simple category -> emoji/icon mapping
 function CategoryIcon({ category }: { category?: string }) {
@@ -973,137 +974,17 @@ export function ChallengeCard({
         />
       )}
 
-      {/* Accept Challenge Modal */}
-      <Dialog open={showAcceptModal} onOpenChange={setShowAcceptModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {acceptOpenChallengeMutation.isSuccess ? "Challenge Accepted!" : "Accept Open Challenge"}
-            </DialogTitle>
-            <DialogDescription>
-              {acceptOpenChallengeMutation.isSuccess
-                ? "Your stake has been locked. Waiting for the creator to confirm their stake."
-                : "Review the stake details before accepting this open challenge."
-              }
-            </DialogDescription>
-          </DialogHeader>
-
-          {acceptOpenChallengeMutation.isSuccess ? (
-            /* Success State - Waiting for Creator */
-            <div className="space-y-4">
-              <div className="flex items-center justify-center p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                <div className="text-center">
-                  <Check className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
-                    Your stake is locked in escrow
-                  </p>
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                    {(() => {
-                      const stakeAmount = challenge.adminCreated
-                        ? (challenge.yesStakeTotal || 0) + (challenge.noStakeTotal || 0)
-                        : (parseFloat(String(challenge.amount)) || 0);
-                      return `${stakeAmount} ${getCurrencySymbol(challenge.paymentTokenAddress)}`;
-                    })()} staked
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-xs text-slate-600 dark:text-slate-400 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
-                <p className="font-medium mb-1">⏱️ Waiting for Creator</p>
-                <p>The challenge creator has been notified and must confirm their stake within the time limit. If they don't respond, your stake will be refunded.</p>
-              </div>
-
-              <div className="text-xs text-slate-600 dark:text-slate-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                <p className="font-medium mb-1">📱 Notifications Sent</p>
-                <p>Both you and the creator have been notified about this acceptance.</p>
-              </div>
-            </div>
-          ) : (
-            /* Initial State - Show stake details */
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                <span className="text-sm font-medium">Your Stake:</span>
-                <div className="flex items-center gap-1">
-                  {(() => {
-                    const stakeAmount = challenge.adminCreated
-                      ? (challenge.yesStakeTotal || 0) + (challenge.noStakeTotal || 0)
-                      : (parseFloat(String(challenge.amount)) || 0);
-                    const currencySymbol = getCurrencySymbol(challenge.paymentTokenAddress);
-                    const logo = getCurrencyLogo(challenge.paymentTokenAddress);
-                    return (
-                      <>
-                        <img src={logo} alt={currencySymbol} className="w-4 h-4" />
-                        <span className="font-mono font-bold">{stakeAmount}</span>
-                        <span className="text-sm">{currencySymbol}</span>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                <span className="text-sm font-medium">Potential Win:</span>
-                <div className="flex items-center gap-1">
-                  {(() => {
-                    const winAmount = challenge.adminCreated
-                      ? (challenge.yesStakeTotal || 0) + (challenge.noStakeTotal || 0)
-                      : (parseFloat(String(challenge.amount)) || 0);
-                    const currencySymbol = getCurrencySymbol(challenge.paymentTokenAddress);
-                    const logo = getCurrencyLogo(challenge.paymentTokenAddress);
-                    return (
-                      <>
-                        <img src={logo} alt={currencySymbol} className="w-4 h-4" />
-                        <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">
-                          {winAmount}
-                        </span>
-                        <span className="text-sm">{currencySymbol}</span>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-              <div className="text-xs text-slate-600 dark:text-slate-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                <p className="font-medium mb-1">What happens next?</p>
-                <p>1. Your stake will be locked in escrow immediately</p>
-                <p>2. The creator gets notified and must confirm their stake</p>
-                <p>3. Once both stakes are confirmed, the challenge becomes active</p>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            {acceptOpenChallengeMutation.isSuccess ? (
-              <Button onClick={() => setShowAcceptModal(false)}>
-                Close
-              </Button>
-            ) : (
-              <>
-                <Button variant="outline" onClick={() => setShowAcceptModal(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => {
-                    acceptOpenChallengeMutation.mutate();
-                  }}
-                  disabled={acceptOpenChallengeMutation.isPending}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  {acceptOpenChallengeMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Staking...
-                    </>
-                  ) : (
-                    <>
-                      <Coins className="w-4 h-4 mr-2" />
-                      Accept
-                    </>
-                  )}
-                </Button>
-              </>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Accept Challenge Modal - Using unified component */}
+      <AcceptChallengeModal
+        isOpen={showAcceptModal}
+        onClose={() => setShowAcceptModal(false)}
+        challenge={challenge}
+        isOpenChallenge={true}
+        onSuccess={() => {
+          setShowAcceptModal(false);
+          queryClient.invalidateQueries({ queryKey: ["/api/challenges"] });
+        }}
+      />
     </Card>
   );
 }

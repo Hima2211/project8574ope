@@ -359,11 +359,23 @@ export default function Notifications() {
                                 if (!notification.read) {
                                   handleMarkAsRead(notification.id);
                                 }
-                                // Set up the challenge object with the notification data
+                                // Set up the challenge object with the notification data (enriched with stake/creator info)
                                 const challenge = {
                                   id: notification.data?.challengeId || notification.challengeId,
+                                  title: notification.data?.challengeTitle || 'Challenge',
+                                  category: notification.data?.category || 'general',
+                                  stakeAmount: notification.data?.stakeAmount,
+                                  stakeAmountWei: notification.data?.stakeAmountWei,
+                                  amount: notification.data?.totalPool,
+                                  totalPool: notification.data?.totalPool,
+                                  challengerUser: notification.data?.challengerUser,
                                   ...notification.data,
                                 };
+                                console.log('📬 Challenge from notification:', {
+                                  notification: notification,
+                                  challenge: challenge,
+                                  notificationData: notification.data,
+                                });
                                 setSelectedChallengeToAccept(challenge);
                                 setShowAcceptChallengeModal(true);
                               }}

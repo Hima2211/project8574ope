@@ -505,6 +505,24 @@ router.post('/create-p2p', PrivyAuthMiddleware, upload.single('coverImage'), asy
     // - Open challenges: broadcast CHALLENGE_CREATED to active users (FCFS)
     // - Direct P2P: notify the specified opponent immediately (MATCH_FOUND)
     try {
+      // Prepare common notification data with full challenge details
+      const notificationData = {
+        actionUrl: `/challenges/${challengeId}`,
+        challengeId,
+        challengeTitle: title,
+        notificationType: 'challenge_received',
+        stakeAmount: (parseInt(stakeAmount) / 2), // per-side stake
+        totalPool: parseInt(stakeAmount),
+        stakeAmountWei: BigInt(stakeAmount + '000000').toString(), // 6 decimals for USDC/USDT
+        category,
+        challengerUser: {
+          id: req.user?.id,
+          username: req.user?.username,
+          firstName: req.user?.firstName || 'Unknown',
+          profileImageUrl: req.user?.profileImageUrl,
+        },
+      };
+
       if (isOpenChallenge) {
         const activeUsers = await db
           .select({ id: users.id })
@@ -521,7 +539,7 @@ router.post('/create-p2p', PrivyAuthMiddleware, upload.single('coverImage'), asy
               body: `@${req.user?.username} created "${title}" — be the first to stake and win.`,
               channels: [NotificationChannel.IN_APP, NotificationChannel.PUSH],
               priority: NotificationPriority.MEDIUM,
-              data: { actionUrl: `/challenges/${challengeId}`, challengeId, notificationType: 'challenge_received' },
+              data: notificationData,
             });
           } catch (err) {
             console.error('Failed to send open-challenge notification to user', u.id, err);
@@ -537,7 +555,7 @@ router.post('/create-p2p', PrivyAuthMiddleware, upload.single('coverImage'), asy
             body: `@${req.user?.username} challenged you to "${title}" — tap to accept or decline.`,
             channels: [NotificationChannel.PUSH, NotificationChannel.IN_APP],
             priority: NotificationPriority.HIGH,
-            data: { actionUrl: `/challenges/${challengeId}`, challengeId, notificationType: 'challenge_received' },
+            data: notificationData,
           });
         } catch (err) {
           console.error('Failed to notify direct opponent', opponentId, err);
@@ -1451,7 +1469,8 @@ router.post('/:challengeId/accept-open', PrivyAuthMiddleware, async (req: Reques
         challengeTitle: challenge.title,
         acceptorId: userId,
         acceptorName: acceptorName,
-        stakeAmount: challenge.amount,
+        // `challenge.amount` is the total pool (both sides). Send per-side stake here.
+        stakeAmount: (challenge.amount / 2),
       },
       channels: [NotificationChannel.PUSHER, NotificationChannel.FIREBASE],
       priority: NotificationPriority.HIGH,
@@ -1470,8 +1489,9 @@ router.post('/:challengeId/accept-open', PrivyAuthMiddleware, async (req: Reques
         challengeTitle: challenge.title,
         creatorId: challenge.challenger,
         creatorName: creatorName,
-        stakeAmount: challenge.amount,
-        totalPool: challenge.amount * 2,
+        // `challenge.amount` is total pool; provide per-side stake and explicit totalPool
+        stakeAmount: (challenge.amount / 2),
+        totalPool: challenge.amount,
       },
       channels: [NotificationChannel.PUSHER, NotificationChannel.FIREBASE],
       priority: NotificationPriority.HIGH,
@@ -1508,8 +1528,9 @@ router.post('/:challengeId/accept-open', PrivyAuthMiddleware, async (req: Reques
       challenged: userId,
       creatorSide: creatorSide,
       acceptorSide: acceptorSide,
-      stakeAmount: challenge.amount,
-      totalPool: challenge.amount * 2,
+      // Return per-side stake and the total pool correctly
+      stakeAmount: (challenge.amount / 2),
+      totalPool: challenge.amount,
       pointsAwarded: joiningPoints,
       chatUrl: `/chat/${parseInt(challengeId)}`, // For automatic chat redirect
       message: `Challenge accepted! Both stakes are now locked on-chain.`,
