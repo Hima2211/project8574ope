@@ -175,24 +175,52 @@ export function AcceptChallengeModal({
         description: isOpenChallenge ? 'Locking stake in escrow...' : 'Connecting to blockchain...',
       });
 
-      // For Open Challenges, call accept-open endpoint instead
+      // Precompute stake and participant side so both Open and P2P use same values
+      const stakeWei = enrichedChallenge.stakeAmountWei?.toString() ||
+                      enrichedChallenge.amount?.toString() ||
+                      enrichedChallenge.stakeAmount?.toString();
+
+      if (!stakeWei || stakeWei === '0' || stakeWei === 'NaN' || stakeWei === 'undefined') {
+        throw new Error('Invalid stake amount. Please ensure the challenge has a valid stake.');
+      }
+
+      // Convert side string to enum value (0 = YES, 1 = NO)
+      const participantSideValue = opponentSide === 'YES' ? 0 : 1;
+
+      // For Open Challenges, perform the on-chain accept first, then notify server
       if (isOpenChallenge) {
-        console.log('📡 Open Challenge - Calling API endpoint...');
-        const result = await apiRequest('POST', `/api/challenges/${enrichedChallenge.id}/accept-open`, {
-          side: opponentSide,
+        console.log('📡 Open Challenge - Performing on-chain accept, then notifying server...');
+
+        // Use the same payment token fallback as P2P flow
+        const paymentToken = enrichedChallenge.paymentTokenAddress || '0x833589fCD6eDb6E08f4c7C32D4f71b3566dA8860';
+
+        // Call the blockchain hook to perform accept on-chain
+        const onchainResult = await acceptP2PChallenge({
+          challengeId: Number(enrichedChallenge.id),
+          stakeAmount: stakeWei,
+          paymentToken,
+          pointsReward: '0',
+          participantSide: participantSideValue,
         });
 
-        setTransactionHash(result.transactionHash || 'pending');
+        console.log('✅ On-chain accept result:', onchainResult);
+        setTransactionHash(onchainResult.transactionHash || 'pending');
+
+        // Inform backend that the open challenge was accepted with an on-chain tx
+        const result = await apiRequest('POST', `/api/challenges/${enrichedChallenge.id}/accept-open`, {
+          side: opponentSide,
+          transactionHash: onchainResult.transactionHash,
+        });
 
         toast({
           title: '✅ Challenge Accepted!',
-          description: `You picked ${opponentSide}. Stake locked in escrow.`,
+          description: `You picked ${opponentSide}. Stakes locked in escrow. Waiting for creator to confirm...`,
         });
 
+        // Close modal after success, don't redirect to chat yet
+        // Chat opens after both stakes are confirmed and challenge becomes ACTIVE
         setTimeout(() => {
           onSuccess?.();
-          // Redirect to chat room
-          setLocation(`/chat/${enrichedChallenge.id}`);
           onClose();
         }, 2000);
       } else {
@@ -202,14 +230,7 @@ export function AcceptChallengeModal({
         console.log('   Stake Amount (wei):', enrichedChallenge.stakeAmountWei);
         console.log('   Payment Token:', enrichedChallenge.paymentTokenAddress || '0x833589fCD6eDb6E08f4c7C32D4f71b3566dA8860');
 
-        const stakeWei = enrichedChallenge.stakeAmountWei?.toString() || 
-                        enrichedChallenge.amount?.toString() || 
-                        enrichedChallenge.stakeAmount?.toString();
         console.log('   Converted stake to:', stakeWei);
-
-        if (!stakeWei || stakeWei === '0' || stakeWei === 'NaN' || stakeWei === 'undefined') {
-          throw new Error('Invalid stake amount. Please ensure the challenge has a valid stake.');
-        }
 
         console.log('   Challenge details for contract call:', {
           id: Number(enrichedChallenge.id),
@@ -218,9 +239,6 @@ export function AcceptChallengeModal({
           creatorSide: creatorSide,
           opponentSide: opponentSide
         });
-
-        // Convert side string to enum value (0 = YES, 1 = NO)
-        const participantSideValue = opponentSide === 'YES' ? 0 : 1;
 
         const result = await acceptP2PChallenge({
           challengeId: Number(enrichedChallenge.id),
@@ -235,13 +253,13 @@ export function AcceptChallengeModal({
 
         toast({
           title: '✅ Challenge Accepted!',
-          description: `Transaction confirmed: ${result.transactionHash?.slice(0, 10)}...`,
+          description: `Stake confirmed on-chain. Waiting for creator to stake...`,
         });
 
+        // Close modal after success, don't redirect to chat yet
+        // Chat opens when both stakes are confirmed and challenge becomes ACTIVE
         setTimeout(() => {
           onSuccess?.();
-          // Redirect to chat room
-          setLocation(`/chat/${enrichedChallenge.id}`);
           onClose();
         }, 2000);
       }

@@ -395,7 +395,14 @@ export function useBlockchainChallenge() {
       // Check and handle ERC20 allowance (only for non-ETH tokens)
       if (params.paymentToken !== '0x0000000000000000000000000000000000000000') {
         const tokenContract = new ethers.Contract(params.paymentToken, ERC20_ABI, signer);
+        console.log('  → Checking allowance on token contract...');
         const allowance = await tokenContract.allowance(userAddress, FACTORY_ADDRESS);
+        console.log('  → Got allowance value');
+          console.log('💰 Converting amounts to BigInt...');
+              console.log('✅ Converted:', {
+                stakeWei: stakeWei.toString(),
+                pointsWei: pointsWei.toString(),
+              });
         const tokenLower = params.paymentToken.toLowerCase();
         
         if (allowance < stakeWei) {
@@ -447,23 +454,34 @@ export function useBlockchainChallenge() {
 
       setIsRetrying(true);
 
+  console.log('🔄 Setting isRetrying to true');
       // REQUIRED: Switch to Base Sepolia before sending transaction
+      console.log('🔗 Switching to Base Sepolia...');
       await switchToBaseSepolia();
+      console.log('✅ Switched to Base Sepolia');
 
       // Diagnostics: ensure contract exists at address
+        console.log('🔍 Verifying contract exists at address...');
       try {
+        console.log('  → Calling provider.getCode()...');
         const code = await provider.getCode(FACTORY_ADDRESS);
-        console.log(`📦 Contract code at ${FACTORY_ADDRESS}: ${code?.slice(0, 64)}... length=${code ? code.length : 0}`);
+        console.log(`📦 Contract bytecode length: ${code ? code.length : 0} chars`);
         if (!code || code === '0x') {
+          console.error(`❌ ERROR: No contract deployed at address ${FACTORY_ADDRESS}`);
           throw new Error(`No contract deployed at address ${FACTORY_ADDRESS}`);
         }
+        console.log('✅ Contract verified at address');
       } catch (e) {
-        console.error('Failed to fetch contract code:', e);
+        console.error('❌ Failed to verify contract:', e);
       }
 
-      return await retryTransaction(async () => {
-        console.log(`💳 Awaiting user to sign transaction...`);
+      console.log('📤 Calling retryTransaction...');
 
+      return await retryTransaction(async () => {
+
+        console.log('\n' + '='.repeat(80));
+        console.log('⚙️  INSIDE retryTransaction - Preparing to submit transaction');
+        console.log('='.repeat(80));
         // For native ETH, send the stake amount as msg.value.
         const isNativeETH = params.paymentToken === '0x0000000000000000000000000000000000000000';
         
@@ -510,73 +528,107 @@ export function useBlockchainChallenge() {
    */
   const acceptP2PChallenge = async (params: AcceptChallengeParams): Promise<TransactionResult> => {
     try {
+      console.log('='.repeat(80));
+      console.log('🚀 START: acceptP2PChallenge()');
+      console.log('='.repeat(80));
+      console.log('📥 Received params:', {
+        challengeId: params.challengeId,
+        stakeAmount: params.stakeAmount,
+        paymentToken: params.paymentToken,
+        participantSide: params.participantSide,
+      });
+
       if (!user) {
+        console.error('❌ ERROR: User not authenticated');
         throw new Error('User not authenticated');
       }
+      console.log('✅ User authenticated:', user?.id);
 
       // Check if Privy is ready
       if (!ready) {
+        console.error('❌ ERROR: Privy is not ready');
         throw new Error('Privy is not ready. Please wait for initialization.');
       }
+      console.log('✅ Privy ready:', ready);
 
       // In Privy v3, prioritize the connected wallet from user.wallet
       let wallet = null;
 
       if (user?.wallet) {
-        console.log('🔍 Using connected external wallet from user.wallet');
+        console.log('✅ Using connected external wallet from user.wallet');
         wallet = user.wallet;
       } else if (wallets && wallets.length > 0) {
-        console.log('🔍 Using wallets array (embedded wallets)');
+        console.log('✅ Using wallets array (embedded wallets), count:', wallets.length);
         const embeddedWallet = (wallets as any[]).find((w: any) => w.walletClientType === 'privy');
         wallet = embeddedWallet || wallets[0];
       }
 
       if (!wallet) {
+        console.error('❌ ERROR: No wallet available');
         throw new Error('No wallet available. Please connect your wallet first.');
       }
 
-      console.log('🔍 Selected wallet:', wallet);
+      console.log('✅ Selected wallet:', {
+        walletClientType: (wallet as any).walletClientType,
+        address: (wallet as any).address,
+      });
 
       // Access the provider based on wallet type
       let provider = null;
 
-      if (wallet.walletClientType === 'privy') {
+      console.log('🔧 Creating provider...');
+      if ((wallet as any).walletClientType === 'privy') {
+        console.log('  → Using Privy embedded wallet');
         // Embedded Privy wallet
-        provider = new ethers.BrowserProvider((wallet as any).getEthereumProvider?.() || (wallet as any).provider as any);
+        const ethProvider = (wallet as any).getEthereumProvider?.() || (wallet as any).provider;
+        console.log('  → Got Ethereum provider:', !!ethProvider);
+        provider = new ethers.BrowserProvider(ethProvider as any);
       } else {
+        console.log('  → Using external wallet (MetaMask, Rainbow, etc.)');
         // External wallet (Rainbow, MetaMask, etc.)
         if ((window as any).ethereum) {
+          console.log('  → window.ethereum available');
           provider = new ethers.BrowserProvider((window as any).ethereum);
         } else {
+          console.error('❌ ERROR: No Ethereum provider available');
           throw new Error('No Ethereum provider available. Please install a Web3 wallet like MetaMask.');
         }
       }
 
       if (!provider) {
+        console.error('❌ ERROR: Provider is null after creation');
         throw new Error('Ethereum provider not available');
       }
+      console.log('✅ Provider created successfully');
 
       // Get the signer from the provider
+      console.log('🔧 Getting signer from provider...');
       const signer = await provider.getSigner();
       if (!signer) {
+        console.error('❌ ERROR: Failed to get signer');
         throw new Error('Failed to get signer from wallet');
       }
 
       const userAddress = await signer.getAddress();
+      console.log('✅ Signer obtained, address:', userAddress);
 
-      console.log(`🔗 Accepting P2P challenge ${params.challengeId}...`);
+      console.log(`🔗 Accepting P2P challenge #${params.challengeId}...`);
       console.log(`📋 Contract address: ${FACTORY_ADDRESS}`);
 
       // Validate contract address
       if (!FACTORY_ADDRESS || FACTORY_ADDRESS === 'null' || FACTORY_ADDRESS === 'undefined') {
+        console.error('❌ ERROR: Invalid contract address:', FACTORY_ADDRESS);
         throw new Error(`Invalid contract address: ${FACTORY_ADDRESS}. Please check VITE_CHALLENGE_FACTORY_ADDRESS environment variable.`);
       }
+      console.log('✅ Contract address valid');
 
+      console.log('🔧 Creating contract instance...');
       const contract = new ethers.Contract(
         FACTORY_ADDRESS,
         CHALLENGE_FACTORY_ABI,
         signer
       );
+      console.log('✅ Contract instance created');
 
       // Convert amounts to BigInt
       const stakeWei = BigInt(params.stakeAmount);
@@ -626,39 +678,54 @@ export function useBlockchainChallenge() {
       return await retryTransaction(async () => {
         console.log(`💳 Awaiting user to sign transaction...`);
 
+        // ✅ FIX: Define checksummedToken that was missing
+        const checksummedToken = ethers.getAddress(params.paymentToken);
+  console.log('✅ Checksummed token:', checksummedToken);
+
         // Contract supports both ETH and ERC20 tokens
         const isNativeETH = checksummedToken === '0x0000000000000000000000000000000000000000';
-        console.log(`💰 Is native ETH: ${isNativeETH}, Stake: ${stakeWei.toString()}`);
-        console.log(`🎯 Participant Side: ${params.participantSide === 0 ? 'YES' : 'NO'}`);
-
-        let tx;
-        if (isNativeETH) {
-          console.log(`✅ Sending ${stakeWei.toString()} wei as transaction value`);
-          tx = await contract.acceptP2PChallenge(params.challengeId, params.participantSide, { value: stakeWei });
-        } else {
-          tx = await contract.acceptP2PChallenge(params.challengeId, params.participantSide);
-        }
-
-        console.log(`⏳ Transaction submitted: ${tx.hash}`);
-        toast({
-          title: 'Transaction Submitted',
-          description: `Hash: ${tx.hash?.slice(0, 10)}...`,
+        console.log('💰 Transaction details:', {
+          isNativeETH,
+          stakeWei: stakeWei.toString(),
+          participantSide: params.participantSide === 0 ? 'YES (0)' : 'NO (1)',
+          challengeId: params.challengeId,
         });
 
+        console.log('💳 Requesting wallet signature...');
+        let tx;
+
+        try {
+          if (isNativeETH) {
+            console.log(`  → Sending native ETH: ${stakeWei.toString()} wei`);
+            tx = await contract.acceptP2PChallenge(params.challengeId, params.participantSide, { value: stakeWei });
+          } else {
+            console.log(`  → Sending ERC20 token (no value needed)`);
+            console.log(`  → Calling contract.acceptP2PChallenge(${params.challengeId}, ${params.participantSide})`);
+            tx = await contract.acceptP2PChallenge(params.challengeId, params.participantSide);
+          }
+          console.log(`✅ Transaction signed! Hash: ${tx.hash}`);
+        } catch (signError: any) {
+          console.error('❌ User rejected transaction or error:', signError.message);
+          throw signError;
+        }
+
+        console.log(`⏳ Waiting for transaction receipt...`);
+        toast({
+          title: 'Transaction Submitted',
+          description: `Hash: ${(tx as any).hash?.slice(0, 10)}...`,
+        });
+
+  console.log('='.repeat(80));
         const receipt = await tx.wait();
 
         if (!receipt) {
           throw new Error('Transaction receipt is null');
         }
 
-        console.log(`⏳ Transaction submitted: ${tx.hash}`);
-        toast({
-          title: 'Transaction Submitted',
-          description: `Hash: ${tx.hash?.slice(0, 10)}...`,
-        });
-
         console.log(`✅ P2P challenge accepted on-chain!`);
-        console.log(`   TX: ${receipt.transactionHash}`);
+        console.log(`   TX Hash: ${receipt.transactionHash}`);
+        console.log(`   Block: ${receipt.blockNumber}`);
+        console.log('='.repeat(80));
 
         return {
           transactionHash: receipt.transactionHash,
