@@ -175,6 +175,19 @@ export function AcceptChallengeModal({
         description: isOpenChallenge ? 'Locking stake in escrow...' : 'Connecting to blockchain...',
       });
 
+      // Helper: send a copy of client logs to server terminal for easier debugging
+      const sendServerLog = async (message: string, meta?: any, level = 'info') => {
+        try {
+          await fetch('/api/debug/client-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ level, message, meta }),
+          });
+        } catch (e) {
+          // ignore failures
+        }
+      };
+
       // Precompute stake and participant side so both Open and P2P use same values
       const stakeWei = enrichedChallenge.stakeAmountWei?.toString() ||
                       enrichedChallenge.amount?.toString() ||
@@ -190,27 +203,65 @@ export function AcceptChallengeModal({
       // For Open Challenges, perform the on-chain accept first, then notify server
       if (isOpenChallenge) {
         console.log('📡 Open Challenge - Performing on-chain accept, then notifying server...');
+        sendServerLog('Open challenge flow started', { challengeId: enrichedChallenge.id, opponentSide }, 'info');
 
         // Use the same payment token fallback as P2P flow
         const paymentToken = enrichedChallenge.paymentTokenAddress || '0x833589fCD6eDb6E08f4c7C32D4f71b3566dA8860';
 
         // Call the blockchain hook to perform accept on-chain
-        const onchainResult = await acceptP2PChallenge({
-          challengeId: Number(enrichedChallenge.id),
-          stakeAmount: stakeWei,
-          paymentToken,
-          pointsReward: '0',
-          participantSide: participantSideValue,
-        });
+        let onchainResult = null;
+        try {
+          onchainResult = await acceptP2PChallenge({
+            challengeId: Number(enrichedChallenge.id),
+            stakeAmount: stakeWei,
+            paymentToken,
+            pointsReward: '0',
+            participantSide: participantSideValue,
+          });
 
-        console.log('✅ On-chain accept result:', onchainResult);
-        setTransactionHash(onchainResult.transactionHash || 'pending');
+          console.log('✅ On-chain accept result:', onchainResult);
+          sendServerLog('On-chain accept result', onchainResult, 'info');
+          setTransactionHash(onchainResult.transactionHash || 'pending');
 
-        // Inform backend that the open challenge was accepted with an on-chain tx
-        const result = await apiRequest('POST', `/api/challenges/${enrichedChallenge.id}/accept-open`, {
-          side: opponentSide,
-          transactionHash: onchainResult.transactionHash,
-        });
+          // Inform backend that the open challenge was accepted with an on-chain tx
+          const result = await apiRequest('POST', `/api/challenges/${enrichedChallenge.id}/accept-open`, {
+            side: opponentSide,
+            transactionHash: onchainResult.transactionHash,
+          });
+          sendServerLog('accept-open notified server', { challengeId: enrichedChallenge.id, tx: onchainResult.transactionHash }, 'info');
+        } catch (err: any) {
+          console.warn('On-chain accept failed:', err?.message || err);
+          sendServerLog('On-chain accept failed', { err: String(err?.message || err), challengeId: enrichedChallenge.id }, 'warn');
+          // If contract indicates this is not a P2P/on-chain challenge, fall back to server-only accept
+          if (String(err?.message || '').includes('Not P2P challenge')) {
+            console.log('ℹ️ Falling back to server accept-open (no on-chain record)');
+            sendServerLog('Falling back to server accept-open', { challengeId: enrichedChallenge.id }, 'warn');
+            toast({
+              title: 'On-chain accept unavailable',
+              description: 'This challenge has no matching on-chain record. Falling back to server-side accept.',
+              variant: 'warning',
+            });
+
+            const result = await apiRequest('POST', `/api/challenges/${enrichedChallenge.id}/accept-open`, {
+              side: opponentSide,
+            });
+            sendServerLog('accept-open fallback notified server', { challengeId: enrichedChallenge.id }, 'info');
+
+            setTransactionHash(result.transactionHash || 'pending');
+            setIsSubmitting(false);
+
+            // Close modal after fallback success
+            setTimeout(() => {
+              onSuccess?.();
+              onClose();
+            }, 2000);
+
+            return;
+          }
+
+          // Otherwise rethrow
+          throw err;
+        }
 
         toast({
           title: '✅ Challenge Accepted!',

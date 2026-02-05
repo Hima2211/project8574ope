@@ -92,15 +92,13 @@ contract ChallengeEscrow is ReentrancyGuard, Ownable {
         address token,
         uint256 amount,
         uint256 challengeId
-    ) external onlyFactory nonReentrant {
+    ) external payable onlyFactory nonReentrant {
         require(user != address(0), "Invalid user");
         require(amount > 0, "Amount must be > 0");
-        
-        // For ERC20: Transfer tokens from ChallengeFactory to escrow
-        if (token != address(0)) {
-            IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        }
-        // For ETH: msg.sender (ChallengeFactory) already sent it via the function call
+        // NOTE: The ChallengeFactory should transfer tokens (ERC20) to this
+        // contract prior to calling this function (or forward ETH value when
+        // calling for native ETH). This function only records the locked
+        // stake and assumes the tokens/ETH already reside in the escrow.
         
         // Track locked stake
         LockedStake memory newStake = LockedStake({

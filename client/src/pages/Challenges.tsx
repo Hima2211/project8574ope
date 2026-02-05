@@ -40,6 +40,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 
 import { apiRequest } from "@/lib/queryClient";
+import { stakeAndCreateP2PChallengeClient } from '@/hooks/useBlockchainChallenge';
+import { parseUnits } from 'ethers';
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -345,7 +347,30 @@ export default function Challenges() {
         requestBody.append('coverImage', formData.coverImage);
       }
 
+      // If this is an open challenge, attempt creator single-call stake on-chain first
+      let onchainTxHash = '';
+      if (formData.challengeType === 'open') {
+        try {
+          const selectedTokenAddress = TOKEN_ADDRESSES[formData.paymentToken];
+          const stakeInWei = parseUnits(formData.amount.toString(), formData.paymentToken === 'ETH' ? 18 : 6).toString();
+          const tx = await stakeAndCreateP2PChallengeClient({
+            participantAddress: '0x0000000000000000000000000000000000000000',
+            stakeAmountWei: stakeInWei,
+            paymentToken: selectedTokenAddress,
+            pointsReward: '0',
+            metadataURI: 'ipfs://bafytest',
+          });
+          onchainTxHash = tx.transactionHash;
+          toast({ title: 'On-chain stake complete', description: `TX: ${onchainTxHash.slice(0,10)}...` });
+        } catch (e: any) {
+          console.warn('Creator on-chain stake failed, falling back to server-only create:', e?.message || e);
+          toast({ title: 'On-chain stake failed', description: 'Creating challenge off-chain instead.', variant: 'warning' });
+        }
+      }
+
       // Get the Privy auth token
+      const token = await getAccessToken();
+        requestBody.append('transactionHash', onchainTxHash || '');
       const token = await getAccessToken();
       
       console.log(`\n🔐 About to call /api/challenges/create-p2p`);

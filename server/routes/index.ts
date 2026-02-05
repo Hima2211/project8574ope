@@ -118,6 +118,24 @@ export function registerBlockchainRoutes(app: express.Application) {
   console.log('   - /api/points');
   console.log('   - /api/admin/challenges');
   console.log('   - /api/followers');
+  console.log('   - /api/debug (client log receiver)');
+
+  // Simple endpoint to receive client-side logs (for debugging in dev)
+  app.post('/api/debug/client-logs', express.json(), (req, res) => {
+    try {
+      const { level = 'info', message = '', meta = null } = req.body || {};
+      const prefix = `[CLIENT_LOG:${level.toUpperCase()}]`;
+      if (meta) {
+        console.log(prefix, message, JSON.stringify(meta, null, 2));
+      } else {
+        console.log(prefix, message);
+      }
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('Failed to record client log:', e);
+      res.status(500).json({ ok: false });
+    }
+  });
 }
 
 export { apiChallengesRouter, apiPayoutsRouter, apiPointsRouter, apiAdminResolveRouter };

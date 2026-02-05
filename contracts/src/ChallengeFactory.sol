@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -239,7 +240,7 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
         
         // Handle ETH vs ERC20
         if (paymentToken == address(0)) {
-            // Native ETH - check msg.value matches stakeAmount
+            // Native ETH - check msg.value matches stakeAmount and forward to escrow
             require(msg.value == stakeAmount, "ETH amount mismatch");
         } else {
             // ERC20 token - transfer from user to escrow
@@ -268,13 +269,21 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
         // For direct P2P: creator locks stake immediately
         if (participant != address(0)) {
             // Direct P2P: lock creator's stake now
-            stakeEscrow.lockStake(msg.sender, paymentToken, stakeAmount, challengeId);
+            if (paymentToken == address(0)) {
+                stakeEscrow.lockStake{value: stakeAmount}(msg.sender, paymentToken, stakeAmount, challengeId);
+            } else {
+                stakeEscrow.lockStake(msg.sender, paymentToken, stakeAmount, challengeId);
+            }
             newChallenge.creatorStaked = true;
             emit CreatorStakeLocked(challengeId, msg.sender, stakeAmount);
         } else {
             // Open challenge: creator will lock stake later via acceptP2PChallenge
-            // For now, transfer is received but stake is not locked
-            stakeEscrow.lockStake(msg.sender, paymentToken, stakeAmount, challengeId);
+            // For backwards-compatibility we still lock if msg.sender forwarded funds
+            if (paymentToken == address(0)) {
+                stakeEscrow.lockStake{value: stakeAmount}(msg.sender, paymentToken, stakeAmount, challengeId);
+            } else {
+                stakeEscrow.lockStake(msg.sender, paymentToken, stakeAmount, challengeId);
+            }
             newChallenge.creatorStaked = true;
             emit CreatorStakeLocked(challengeId, msg.sender, stakeAmount);
         }
@@ -290,6 +299,80 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
         
         return challengeId;
     }
+
+    /**
+     * @dev Create a P2P challenge and lock the creator's stake in one transaction.
+     * Uses factory-pulls pattern for ERC20 (factory transfers to escrow) and
+     * forwards ETH when paymentToken == address(0).
+     */
+    function stakeAndCreateP2PChallenge(
+        address participant,
+        address paymentToken,
+        uint256 stakeAmount,
+        uint256 creatorSide,
+        uint256 pointsReward,
+        string calldata metadataURI,
+        uint256 permitDeadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external payable nonReentrant returns (uint256) {
+        if (participant != address(0)) {
+            require(participant != msg.sender, "Cannot challenge yourself");
+        }
+        require(creatorSide == 0 || creatorSide == 1, "Invalid side");
+        require(!blacklistedTokens[paymentToken], "Token is blacklisted");
+        require(stakeAmount > 0, "Stake must be > 0");
+        require(pointsReward > 0, "Points reward must be > 0");
+        require(pointsReward <= 500, "Points reward cannot exceed 500");
+
+        uint256 challengeId = nextChallengeId++;
+
+        Challenge storage newChallenge = challenges[challengeId];
+        newChallenge.id = challengeId;
+        newChallenge.challengeType = ChallengeType.P2P;
+        newChallenge.creator = msg.sender;
+        newChallenge.participant = participant;
+        newChallenge.paymentToken = paymentToken;
+        newChallenge.stakeAmount = stakeAmount;
+        newChallenge.pointsReward = pointsReward;
+        newChallenge.creatorSide = Side(creatorSide);
+        newChallenge.status = ChallengeStatus.CREATED;
+        newChallenge.createdAt = block.timestamp;
+        newChallenge.metadataURI = metadataURI;
+        newChallenge.creatorStaked = false;
+        newChallenge.participantStaked = false;
+
+        // Transfer or forward funds to escrow and record lock
+        if (paymentToken == address(0)) {
+            // Forward ETH to escrow
+            require(msg.value == stakeAmount, "ETH amount mismatch");
+            stakeEscrow.lockStake{value: stakeAmount}(msg.sender, paymentToken, stakeAmount, challengeId);
+        } else {
+            require(msg.value == 0, "Do not send ETH for ERC20");
+            // If a permit signature is provided (deadline != 0), use it to
+            // approve the factory to move tokens on behalf of the creator.
+            if (permitDeadline != 0) {
+                IERC20Permit(paymentToken).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s);
+            }
+            IERC20(paymentToken).safeTransferFrom(msg.sender, address(stakeEscrow), stakeAmount);
+            stakeEscrow.lockStake(msg.sender, paymentToken, stakeAmount, challengeId);
+        }
+
+        newChallenge.creatorStaked = true;
+        emit CreatorStakeLocked(challengeId, msg.sender, stakeAmount);
+
+        emit ChallengeCreatedP2P(
+            challengeId,
+            msg.sender,
+            participant,
+            paymentToken,
+            stakeAmount,
+            pointsReward
+        );
+
+        return challengeId;
+    }
     
     /**
      * @dev Accept a P2P challenge (User B stakes matching amount)
@@ -298,7 +381,7 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
      * participantSide: Must be opposite of creatorSide
      * Can stake with ETH (msg.value) or ERC20 token
      */
-    function acceptP2PChallenge(uint256 challengeId, uint256 participantSide) external payable nonReentrant {
+    function acceptP2PChallenge(uint256 challengeId, uint256 participantSide, uint256 permitDeadline, uint8 v, bytes32 r, bytes32 s) external payable nonReentrant {
         Challenge storage challenge = challenges[challengeId];
         
         require(challenge.challengeType == ChallengeType.P2P, "Not P2P challenge");
@@ -320,28 +403,38 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
         
         // Handle ETH vs ERC20
         if (challenge.paymentToken == address(0)) {
-            // Native ETH - check msg.value matches stakeAmount
+            // Native ETH - check msg.value matches stakeAmount and forward to escrow
             require(msg.value == challenge.stakeAmount, "ETH amount mismatch");
+            // Set participant side
+            challenge.participantSide = Side(participantSide);
+            stakeEscrow.lockStake{value: challenge.stakeAmount}(
+                msg.sender,
+                challenge.paymentToken,
+                challenge.stakeAmount,
+                challengeId
+            );
         } else {
-            // ERC20 token - transfer from user to escrow
+            // ERC20 token - transfer from user to escrow then record lock
             require(msg.value == 0, "Do not send ETH for ERC20");
+            // Attempt permit if signature provided
+            if (permitDeadline != 0) {
+                IERC20Permit(challenge.paymentToken).permit(msg.sender, address(this), challenge.stakeAmount, permitDeadline, v, r, s);
+            }
             IERC20(challenge.paymentToken).safeTransferFrom(
                 msg.sender,
                 address(stakeEscrow),
                 challenge.stakeAmount
             );
+            // Set participant side
+            challenge.participantSide = Side(participantSide);
+            // Lock participant's stake (record-only)
+            stakeEscrow.lockStake(
+                msg.sender,
+                challenge.paymentToken,
+                challenge.stakeAmount,
+                challengeId
+            );
         }
-        
-        // Set participant side
-        challenge.participantSide = Side(participantSide);
-        
-        // Lock participant's stake
-        stakeEscrow.lockStake(
-            msg.sender,
-            challenge.paymentToken,
-            challenge.stakeAmount,
-            challengeId
-        );
         
         challenge.participantStaked = true;
         
@@ -373,25 +466,15 @@ contract ChallengeFactory is ReentrancyGuard, Ownable {
         
         // Handle ETH vs ERC20
         if (challenge.paymentToken == address(0)) {
-            // Native ETH - check msg.value matches stakeAmount
+            // Native ETH - check msg.value matches stakeAmount and forward to escrow
             require(msg.value == challenge.stakeAmount, "ETH amount mismatch");
+            stakeEscrow.lockStake{value: challenge.stakeAmount}(msg.sender, challenge.paymentToken, challenge.stakeAmount, challengeId);
         } else {
-            // ERC20 token - transfer from creator to escrow
+            // ERC20 token - transfer from creator to escrow then record lock
             require(msg.value == 0, "Do not send ETH for ERC20");
-            IERC20(challenge.paymentToken).safeTransferFrom(
-                msg.sender,
-                address(stakeEscrow),
-                challenge.stakeAmount
-            );
+            IERC20(challenge.paymentToken).safeTransferFrom(msg.sender, address(stakeEscrow), challenge.stakeAmount);
+            stakeEscrow.lockStake(msg.sender, challenge.paymentToken, challenge.stakeAmount, challengeId);
         }
-        
-        // Lock creator's stake
-        stakeEscrow.lockStake(
-            msg.sender,
-            challenge.paymentToken,
-            challenge.stakeAmount,
-            challengeId
-        );
         
         // Both stakes now locked - challenge is fully active
         challenge.creatorStaked = true;

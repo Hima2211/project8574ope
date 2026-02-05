@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useBlockchainChallenge } from "@/hooks/useBlockchainChallenge";
+import { stakeAndCreateP2PChallengeClient } from '@/hooks/useBlockchainChallenge';
+import { parseUnits } from 'ethers';
 import { AcceptChallengeModal } from "@/components/AcceptChallengeModal";
 
 import { Button } from "@/components/ui/button";
@@ -302,13 +304,15 @@ export default function Friends() {
       });
 
       try {
-        await createP2PChallenge({
-          opponentAddress: selectedUser?.id || data.challenged,
-          stakeAmount: stakeWei,
+        const participantAddress = selectedUser?.primaryWalletAddress || selectedUser?.id || data.challenged;
+        const tx = await stakeAndCreateP2PChallengeClient({
+          participantAddress,
+          stakeAmountWei: stakeWei,
           paymentToken: selectedTokenAddress,
           pointsReward,
           metadataURI: 'ipfs://bafytest',
         });
+        console.log('Creator stake+create tx:', tx.transactionHash);
       } catch (blockchainError: any) {
         console.warn('Blockchain submission failed, but challenge is stored in DB:', blockchainError);
         // Don't throw - challenge is already in DB, user can retry signing later

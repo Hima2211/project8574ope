@@ -12,7 +12,8 @@ const ERC20_ABI = [
 
 const CHALLENGE_FACTORY_ABI = [
   "function createP2PChallenge(address participant, address paymentToken, uint256 stakeAmount, uint256 pointsReward, string metadataURI) public returns (uint256)",
-  "function acceptP2PChallenge(uint256 challengeId, uint256 participantSide) public payable",
+  "function acceptP2PChallenge(uint256 challengeId, uint256 participantSide, uint256 permitDeadline, uint8 v, bytes32 r, bytes32 s) public payable",
+  "function stakeAndCreateP2PChallenge(address participant,address paymentToken,uint256 stakeAmount,uint256 creatorSide,uint256 pointsReward,string metadataURI,uint256 permitDeadline,uint8 v,bytes32 r,bytes32 s) public payable returns (uint256)",
   "function claimStake(uint256 challengeId) public",
   "function challenges(uint256) public view returns (uint256 id, uint8 challengeType, address creator, address participant, address paymentToken, uint256 stakeAmount, uint256 pointsReward, uint8 status, address winner, uint256 createdAt, uint256 resolvedAt, string metadataURI)",
 ];
@@ -87,21 +88,10 @@ export async function stakeInChallenge(
   if (!privyWallet) throw new Error("Privy wallet not connected");
 
   try {
-    // 1. Approve USDC to ChallengeFactory
-    console.log("Approving USDC...");
-    const approvalTx = await approveUSDC(
-      privyWallet,
-      addresses.usdc,
-      addresses.challengeFactory,
-      stakeAmountUSDC
-    );
-    console.log("Approval tx:", approvalTx);
-
-    // 2. Create provider from Privy wallet
+    // Attempt single-call flow: try EIP-2612 permit, fall back to approve+create
     const provider = new BrowserProvider(privyWallet.getEthereumProvider());
     const signer = await provider.getSigner();
 
-    // 3. Stake in challenge
     const stakeInWei = parseUnits(stakeAmountUSDC.toString(), 6);
     const factoryContract = new Contract(
       addresses.challengeFactory,
@@ -109,32 +99,79 @@ export async function stakeInChallenge(
       signer
     );
 
-    console.log("Creating P2P challenge...", {
-      participantAddress,
-      usdc: addresses.usdc,
-      stakeInWei: stakeInWei.toString(),
-      pointsReward,
-    });
+    // Try to sign a permit (EIP-2612). If it fails, fall back to approve.
+    const trySignPermit = async () => {
+      try {
+        const token = new Contract(addresses.usdc, [
+          'function name() view returns (string)',
+          'function nonces(address) view returns (uint256)'
+        ], provider);
+        const name = await token.name();
+        const nonce = await token.nonces(await signer.getAddress());
+        const chain = await provider.getNetwork();
+        const chainId = chain.chainId;
 
-    const tx = await factoryContract.createP2PChallenge(
-      participantAddress,
-      addresses.usdc,
-      stakeInWei,
-      pointsReward,
-      metadataURI
-    );
-
-    console.log("Challenge creation tx:", tx.hash);
-    const receipt = await tx.wait();
-
-    if (!receipt) throw new Error("Challenge creation failed");
-
-    // Extract challenge ID from receipt logs (optional)
-    // For now, return the tx hash and let the backend fetch the ID
-    return {
-      transactionHash: receipt.transactionHash,
-      challengeId: "0", // Will be updated once confirmed on-chain
+        const deadline = Math.floor(Date.now() / 1000) + 3600; // 1hr
+        const domain = { name, version: '1', chainId, verifyingContract: addresses.usdc };
+        const types = { Permit: [
+          { name: 'owner', type: 'address' },
+          { name: 'spender', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' },
+        ] } as any;
+        const owner = await signer.getAddress();
+        const message = { owner, spender: addresses.challengeFactory, value: stakeInWei.toString(), nonce: nonce.toString(), deadline };
+        const signature = await (signer as any)._signTypedData(domain, types, message);
+        const sig = ethers.splitSignature(signature);
+        return { deadline, v: sig.v, r: sig.r, s: sig.s };
+      } catch (e) {
+        console.warn('Permit attempt failed, will fallback to approve', e?.message || e);
+        return null;
+      }
     };
+
+    const permit = await trySignPermit();
+
+    if (!permit) {
+      console.log('Approving USDC (fallback)');
+      await approveUSDC(privyWallet, addresses.usdc, addresses.challengeFactory, stakeAmountUSDC);
+    }
+
+    // Call the single transaction function on the factory
+    const ZERO_BYTES32 = '0x' + '00'.repeat(32);
+    let tx;
+    if (permit) {
+      tx = await factoryContract.stakeAndCreateP2PChallenge(
+        participantAddress,
+        addresses.usdc,
+        stakeInWei,
+        0, // default creatorSide = YES (0); UI can be extended to choose
+        pointsReward,
+        metadataURI,
+        permit.deadline,
+        permit.v,
+        permit.r,
+        permit.s
+      );
+    } else {
+      tx = await factoryContract.stakeAndCreateP2PChallenge(
+        participantAddress,
+        addresses.usdc,
+        stakeInWei,
+        0,
+        pointsReward,
+        metadataURI,
+        0,
+        0,
+        ZERO_BYTES32,
+        ZERO_BYTES32
+      );
+    }
+
+    const receipt = await tx.wait();
+    if (!receipt) throw new Error('Challenge creation failed');
+    return { transactionHash: receipt.transactionHash, challengeId: '0' };
   } catch (error) {
     console.error("Stake in challenge error:", error);
     throw error;
@@ -206,7 +243,8 @@ export async function acceptChallenge(
     );
 
     console.log("Accepting challenge:", challengeId, "with side:", participantSide);
-    const tx = await factoryContract.acceptP2PChallenge(challengeId, participantSide);
+    const ZERO_BYTES32 = '0x' + '00'.repeat(32);
+    const tx = await factoryContract.acceptP2PChallenge(challengeId, participantSide, 0, 0, ZERO_BYTES32, ZERO_BYTES32);
     const receipt = await tx.wait();
 
     if (!receipt) throw new Error("Challenge acceptance failed");

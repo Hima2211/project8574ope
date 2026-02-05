@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
+import { stakeAndCreateP2PChallengeClient } from '@/hooks/useBlockchainChallenge';
+import { parseUnits } from 'ethers';
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { formatDistanceToNow } from "date-fns";
@@ -213,7 +215,33 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ userId, onClose }) => {
         challenged: userId,
         dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Added due date
       };
-      return await apiRequest("POST", `/api/challenges`, data);
+      const response = await apiRequest("POST", `/api/challenges`, data);
+
+      // Attempt single-call on-chain stake for direct challenge (creator flow)
+      try {
+        const TOKEN_ADDRESSES: Record<'ETH' | 'USDT' | 'USDC', string> = {
+          'ETH': '0x0000000000000000000000000000000000000000',
+          'USDT': '0x9eba6af5f65ecb20e65c0c9e0b5cdbbbe9c5c00c0',
+          'USDC': '0x036cbd53842c5426634e7929541ec2318f3dcf7e',
+        };
+
+        const selectedTokenAddress = TOKEN_ADDRESSES['USDC'];
+        const stakeInWei = parseUnits(String(challengeData.amount), 6).toString();
+        const participantAddress = (profile as any)?.primaryWalletAddress || userId;
+
+        const tx = await stakeAndCreateP2PChallengeClient({
+          participantAddress,
+          stakeAmountWei: stakeInWei,
+          paymentToken: selectedTokenAddress,
+          pointsReward: '0',
+          metadataURI: 'ipfs://bafytest',
+        });
+        toast({ title: 'On-chain stake submitted', description: `TX: ${tx.transactionHash?.slice(0,10)}...` });
+      } catch (e: any) {
+        console.warn('On-chain creator stake failed, proceeding with DB-only creation:', e?.message || e);
+      }
+
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/challenges"] });
