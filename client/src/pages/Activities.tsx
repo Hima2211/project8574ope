@@ -19,6 +19,13 @@ import {
   Trophy,
   AlertTriangle,
   Edit,
+  Wallet,
+  Zap,
+  ShoppingCart,
+  Gift,
+  Calendar,
+  Receipt,
+  ArrowUpRight,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -605,31 +612,36 @@ export default function Activities() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Compact Tab Navigation */}
             <Tabs defaultValue="created" className="space-y-2">
-              <TabsList className="grid w-full grid-cols-5 h-8 sm:h-9 border-0 shadow-none bg-transparent gap-1">
+              <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-8 sm:h-9 border-0 shadow-none bg-transparent gap-1">
                 <TabsTrigger value="created" className="flex items-center space-x-1 text-xs">
                   <i className="fas fa-plus text-xs"></i>
                   <span className="hidden sm:inline">Created</span>
-                  <span>({createdActivities.length})</span>
+                  <span className="hidden md:inline">({createdActivities.length})</span>
                 </TabsTrigger>
                 <TabsTrigger value="active" className="flex items-center space-x-1 text-xs">
                   <i className="fas fa-clock text-xs"></i>
                   <span className="hidden sm:inline">Active</span>
-                  <span>({activeActivities.length})</span>
+                  <span className="hidden md:inline">({activeActivities.length})</span>
                 </TabsTrigger>
                 <TabsTrigger value="discuss" className="flex items-center space-x-1 text-xs">
                   <i className="fas fa-handshake text-xs"></i>
-                  <span className="hidden sm:inline">Participated</span>
-                  <span>({participatedChallenges.length})</span>
+                  <span className="hidden sm:inline">Joined</span>
+                  <span className="hidden md:inline">({participatedChallenges.length})</span>
                 </TabsTrigger>
                 <TabsTrigger value="won" className="flex items-center space-x-1 text-xs">
                   <i className="fas fa-trophy text-xs"></i>
                   <span className="hidden sm:inline">Won</span>
-                  <span>({wonActivities.length})</span>
+                  <span className="hidden md:inline">({wonActivities.length})</span>
                 </TabsTrigger>
                 <TabsTrigger value="lost" className="flex items-center space-x-1 text-xs">
                   <i className="fas fa-exclamation-triangle text-xs"></i>
                   <span className="hidden sm:inline">Lost</span>
-                  <span>({lostActivities.length})</span>
+                  <span className="hidden md:inline">({lostActivities.length})</span>
+                </TabsTrigger>
+                <TabsTrigger value="transactions" className="flex items-center space-x-1 text-xs">
+                  <Receipt className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Activity</span>
+                  <span className="hidden md:inline">({transactions.length})</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -778,7 +790,34 @@ export default function Activities() {
               )}
             </TabsContent>
 
-
+            <TabsContent value="transactions" className="space-y-2">
+              {transactionsLoading ? (
+                <>
+                  <ActivityCardSkeleton />
+                  <ActivityCardSkeleton />
+                  <ActivityCardSkeleton />
+                </>
+              ) : transactions.length === 0 ? (
+                <Card className="bg-white dark:bg-slate-800 mobile-compact-card border-0 md:border md:border-slate-200 md:dark:border-slate-700">
+                  <CardContent className="text-center py-6">
+                    <Receipt className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                      No transactions yet
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Create and complete challenges to see your transaction history here.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                transactions.map((transaction: any) => (
+                  <TransactionCard
+                    key={`transaction-${transaction.id}`}
+                    transaction={transaction}
+                  />
+                ))
+              )}
+            </TabsContent>
           </Tabs>
         </div>
 

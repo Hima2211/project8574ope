@@ -17,26 +17,16 @@ import {
 } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { isUnauthorizedError } from "@/lib/authUtils";
-import { formatDistanceToNow, formatDistanceToNowStrict } from "date-fns";
-// Token-friendly formatting helper (no fiat symbols)
-import { PlayfulLoading } from "@/components/ui/playful-loading";
 import { getBalances } from "@/lib/contractInteractions";
 import {
-  ShoppingCart,
   Wallet,
-  ArrowUpRight,
   ArrowDownLeft,
   TrendingUp,
   Receipt,
-  Gift,
-  Calendar,
-  Trophy,
   Plus,
   ExternalLink,
-  Zap,
-  Send,
   Check,
+  Zap,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
@@ -114,8 +104,6 @@ export default function WalletPage() {
   const [claimableChallenges, setClaimableChallenges] = useState<any[]>([]);
   const [claiming, setClaiming] = useState<boolean>(false);
   const [chartDays, setChartDays] = useState<7 | 30>(7);
-  const [pointsHistory, setPointsHistory] = useState<any[] | null>(null);
-  const [loadingHistory, setLoadingHistory] = useState(false);
   
   // Get current chain ID early to use in queries
   const chainId = useChain((state) => state.currentChainId);
@@ -311,27 +299,7 @@ export default function WalletPage() {
     },
   });
 
-  const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ["/api/user/transactions"],
-    retry: false,
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-      }
-    },
-  });
 
-  // Normalize transactions to an array shape for rendering
-  const txArray = Array.isArray(transactions)
-    ? transactions
-    : (transactions && (transactions.transactions || transactions.items)) || [];
 
   if (!user) return null;
 
@@ -534,12 +502,7 @@ export default function WalletPage() {
               <h3 className="text-sm sm:text-xl font-bold text-amber-900 dark:text-amber-100">{currentPointsDisplay}</h3>
               {/* Weekly Claiming Status */}
               <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                {canClaimPointsThisWeek(pointsData?.lastClaimedAt) ? (
-                  <div className="flex items-center gap-1">
-                    <Check className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                    <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">Ready to claim</p>
-                  </div>
-                ) : (
+                {!canClaimPointsThisWeek(pointsData?.lastClaimedAt) && (
                   <div className="flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-amber-500 dark:text-amber-500" />
                     <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -548,50 +511,13 @@ export default function WalletPage() {
                   </div>
                 )}
               </div>
-                {/* DEV: raw debug info from points API */}
-                {import.meta.env.DEV && (
-                  <div className="mt-2">
-                    <details className="text-xs text-slate-600 dark:text-slate-400">
-                      <summary className="cursor-pointer">Debug: points API response</summary>
-                      <pre className="mt-2 text-[11px] p-2 bg-slate-100 dark:bg-slate-900 rounded">{JSON.stringify(pointsData || {}, null, 2)}</pre>
-                      <div className="mt-2 flex gap-2">
-                        <button
-                          className="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700"
-                          onClick={async () => {
-                            if (!user?.id) return;
-                            setLoadingHistory(true);
-                            try {
-                              const res = await apiRequest('GET', `/api/points/history/${user.id}`);
-                              setPointsHistory(res.transactions || res);
-                            } catch (err) {
-                              console.error('Failed to load points history', err);
-                              setPointsHistory([{ error: String(err) }]);
-                            } finally {
-                              setLoadingHistory(false);
-                            }
-                          }}
-                        >
-                          {loadingHistory ? 'Loading…' : 'Load Points History'}
-                        </button>
-                        <button
-                          className="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700"
-                          onClick={() => setPointsHistory(null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      {pointsHistory && (
-                        <pre className="mt-2 text-[11px] p-2 bg-slate-50 dark:bg-slate-900 rounded max-h-64 overflow-auto">{JSON.stringify(pointsHistory, null, 2)}</pre>
-                      )}
-                    </details>
-                  </div>
-                )}
             </div>
           </div>
         </div>
 
-        {/* Performance/Earnings Chart */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700 mt-6 sm:mt-8">
+        {/* Performance/Earnings Chart - HIDDEN FOR NOW */}
+        <div className="hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700 mt-6 sm:mt-8">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">Portfolio Performance</h3>
@@ -669,6 +595,7 @@ export default function WalletPage() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        </div>
 
         {/* Deposit & Claim Actions */}
         <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-6 sm:mt-10">
@@ -705,134 +632,17 @@ export default function WalletPage() {
           </Button>
         </div>
 
-        {/* Recent Transactions */}
-        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 mt-8 sm:mt-12">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-              Recent Activity
-            </h3>
-            <Button variant="ghost" size="sm" className="p-1">
-              <Receipt className="w-4 h-4" />
-            </Button>
-          </div>
-
-          {isLoading ? (
-            <PlayfulLoading
-              type="wallet"
-              title="Loading Transactions"
-              description="Getting your transaction history..."
-              className="py-8"
-            />
-          ) : txArray.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-3xl flex items-center justify-center mx-auto mb-4">
-                <Receipt className="w-8 h-8 text-slate-400" />
-              </div>
-              <h4 className="text-slate-900 dark:text-white font-medium mb-1">
-                No transactions yet
-              </h4>
-              <p className="text-slate-500 text-sm">
-                Your transaction history will appear here.
+        {/* Transaction History Notice */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-4 mt-8 sm:mt-12">
+          <div className="flex items-start gap-3">
+            <Receipt className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-blue-900 dark:text-blue-200">View Full Transaction History</h3>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                For a complete record of all your transactions, points, and activities, please visit the <a href="/activities" className="underline font-semibold hover:opacity-80">Activities</a> page.
               </p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {txArray.slice(0, 10).map((transaction: any) => {
-                // Determine icon and color based on transaction type
-                const isPoints = transaction.type?.includes('points') || transaction.description?.includes('Bantah');
-                const isEarning = parseFloat(transaction.amount) >= 0;
-                const isChallengeWin = transaction.type?.includes('challenge') && isEarning && transaction.description?.includes('Won');
-                
-                return (
-                  <div
-                    key={transaction.id}
-                    className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-2xl transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                          (transaction.type === "deposit" || transaction.type === "signup_bonus" || transaction.type === "daily_signin" || transaction.type === "Gift received" || isPoints && isEarning)
-                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
-                            : isChallengeWin
-                              ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
-                              : transaction.type === "coin_purchase" && parseFloat(transaction.amount) > 0
-                                ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400"
-                                : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
-                        }`}
-                      >
-                        {isPoints && <Zap className="w-5 h-5" />}
-                        {isChallengeWin && <Trophy className="w-5 h-5" />}
-                        {transaction.type === "signup_bonus" && <Trophy className="w-5 h-5" />}
-                        {transaction.type === "daily_signin" && <Calendar className="w-5 h-5" />}
-                        {transaction.type === "coin_purchase" && <ShoppingCart className="w-5 h-5" />}
-                        {transaction.type === "challenge_escrow" && <ArrowUpRight className="w-5 h-5" />}
-                        {transaction.type === "Gifted" && <Gift className="w-5 h-5" />}
-                        {transaction.type === "Gift received" && <Gift className="w-5 h-5" />}
-                        {![
-                          "signup_bonus",
-                          "daily_signin",
-                          "coin_purchase",
-                          "challenge_escrow",
-                          "Gifted",
-                          "Gift received",
-                        ].includes(transaction.type) && !isPoints && <Wallet className="w-5 h-5" />}
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-slate-900 dark:text-white text-sm">
-                          {isPoints && "🎯 Bantah Points"}
-                          {!isPoints && (
-                            <>
-                              {transaction.type === "signup_bonus" && "Welcome Bonus"}
-                              {transaction.type === "daily_signin" && "Daily Sign-in"}
-                              {transaction.type === "coin_purchase" && "Coin Purchase"}
-                              {transaction.type === "challenge_escrow" && "Challenge Entry"}
-                              {transaction.type === "Gifted" && "Gifted"}
-                              {transaction.type === "Gift received" && "Gift received"}
-                              {![
-                                "signup_bonus",
-                                "daily_signin",
-                                "coin_purchase",
-                                "challenge_escrow",
-                                "Gifted",
-                                "Gift received",
-                              ].includes(transaction.type) &&
-                                transaction.type.charAt(0).toUpperCase() +
-                                  transaction.type.slice(1)}
-                            </>
-                          )}
-                        </h4>
-                        <p className="text-xs text-slate-400">
-                          {transaction.description ? transaction.description.substring(0, 40) : ''}
-                          {formatDistanceToNow(new Date(transaction.createdAt), {
-                            addSuffix: true,
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p
-                        className={`text-sm font-semibold ${
-                          parseFloat(transaction.amount) >= 0
-                            ? "text-green-600 dark:text-green-400"
-                            : "text-red-600 dark:text-red-400"
-                        }`}
-                      >
-                        {parseFloat(transaction.amount) >= 0 ? "+" : ""}
-                        {isPoints
-                          ? `${Math.abs(parseFloat(transaction.amount) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} BPTS`
-                          : ['Gifted', 'Gift received', 'challenge_escrow'].includes(transaction.type)
-                            ? `${Math.abs(parseInt(transaction.amount)).toLocaleString()} coins`
-                            : (typeof transaction.amount === 'number' || !isNaN(Number(transaction.amount)))
-                              ? Number(transaction.amount).toLocaleString(undefined, { maximumFractionDigits: 4 })
-                              : String(transaction.amount)
-                        }
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Deposit Modal */}
