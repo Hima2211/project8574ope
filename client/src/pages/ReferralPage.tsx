@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { formatDistanceToNow } from "date-fns";
 import { ShareButton } from "@/components/ShareButton";
+import getDisplayName from "@/utils/userDisplay";
 import { shareReferral } from "@/utils/sharing";
 import { 
   Users, 
@@ -84,8 +85,8 @@ export default function ReferralPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 theme-transition">
       <DynamicMetaTags 
         pageType="profile"
-        customTitle={`${user?.username || 'User'}'s Referral Program on Bantah`}
-        customDescription={`Join ${user?.username || 'User'}'s referral network on Bantah. Earn 500 Bantah Points for each successful referral. Total referrals: ${totalReferrals}`}
+        customTitle={`${getDisplayName(user) || 'Profile'}'s Referral Program on Bantah`}
+        customDescription={`Join ${getDisplayName(user) || 'this user'}'s referral network on Bantah. Earn 500 Bantah Points for each successful referral. Total referrals: ${totalReferrals}`}
       />
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header - spacing reduced after removing intro text */}
@@ -271,7 +272,7 @@ export default function ReferralPage() {
                     <Avatar className="w-10 h-10">
                       <AvatarImage 
                         src={referral.referredUser?.profileImageUrl || undefined} 
-                        alt={referral.referredUser?.firstName || 'User'} 
+                        alt={getDisplayName({ profile: referral.referredUser }) || ''} 
                       />
                       <AvatarFallback className="text-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white">
                         {(referral.referredUser?.firstName?.[0] || 'U').toUpperCase()}
@@ -279,7 +280,7 @@ export default function ReferralPage() {
                     </Avatar>
                     <div>
                       <h4 className="font-medium text-slate-900 dark:text-white">
-                        {referral.referredUser?.firstName || 'Anonymous User'}
+                        {getDisplayName({ profile: referral.referredUser }) || 'Anonymous User'}
                       </h4>
                       <p className="text-sm text-slate-500 dark:text-slate-400">
                         {formatDistanceToNow(new Date(referral.createdAt), { addSuffix: true })}

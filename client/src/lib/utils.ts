@@ -264,6 +264,6 @@ export function formatUserDisplayName(user?: {
     }
   }
 
-  // Last resort: Show truncated user ID
-  return user?.id ? (user.id.length > 8 ? `${user.id.slice(0, 8)}...` : user.id) : "User";
+  // Last resort: Show truncated user ID (or empty string as final fallback)
+  return user?.id ? (user.id.length > 8 ? `${user.id.slice(0, 8)}...` : user.id) : "";
 }

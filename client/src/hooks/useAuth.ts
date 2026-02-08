@@ -1,4 +1,5 @@
 import { usePrivy } from '@privy-io/react-auth';
+import type { User as UserType } from '@/types/user';
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
@@ -70,7 +71,7 @@ export function useAuth() {
   };
 
   return {
-    user: stableAuthenticated ? user : null,
+    user: stableAuthenticated ? (user as unknown as UserType) : null,
     isLoading: !ready,
     isAuthenticated: stableAuthenticated,
     login,

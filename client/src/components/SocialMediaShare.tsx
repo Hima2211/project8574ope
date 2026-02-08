@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { ChallengeIntentCard } from "@/components/ChallengeIntentCard";
+import { getDisplayName } from '@/utils/userDisplay';
 import { 
   Share2, 
   Copy, 
@@ -55,11 +56,11 @@ export function SocialMediaShare({ challenge, trigger }: SocialMediaShareProps) 
   const challengeUrl = `${window.location.origin}/challenges/${challenge.id}`;
   
   const getChallengerName = () => {
-    return challenge.challengerUser.username || challenge.challengerUser.firstName || 'User';
+    return getDisplayName({ profile: challenge.challengerUser }) || 'Profile';
   };
 
   const getChallengedName = () => {
-    return challenge.challengedUser.username || challenge.challengedUser.firstName || 'User';
+    return getDisplayName({ profile: challenge.challengedUser }) || 'Profile';
   };
 
   const generateShareText = (platform: string) => {

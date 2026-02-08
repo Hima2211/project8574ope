@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import type { AppUser } from '@/types/user';
 import { useLocation } from "wouter";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ const updateProfileSchema = z.object({
 
 export default function ProfileSettings() {
   const { user } = useAuth();
+  const currentUser = user as unknown as AppUser | null;
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -42,10 +44,10 @@ export default function ProfileSettings() {
   const form = useForm<z.infer<typeof updateProfileSchema>>({
     resolver: zodResolver(updateProfileSchema),
     defaultValues: {
-      firstName: user?.firstName || "",
-      lastName: user?.lastName || "",
-      username: user?.username || "",
-      email: user?.email || "",
+      firstName: currentUser?.firstName || "",
+      lastName: currentUser?.lastName || "",
+      username: currentUser?.username || "",
+      email: currentUser?.email || "",
     },
   });
 
@@ -191,7 +193,7 @@ export default function ProfileSettings() {
                 <Avatar className="w-16 h-16 sm:w-20 sm:h-20">
                   <AvatarImage 
                     src={user.profileImageUrl || undefined} 
-                    alt={user.firstName || user.username || 'User'} 
+                    alt={user.firstName || user.username || user.email || user.wallet?.address || 'Profile'} 
                   />
                   <AvatarFallback className="text-base sm:text-lg">
                     {(user.firstName?.[0] || user.username?.[0] || 'U').toUpperCase()}

@@ -146,7 +146,7 @@ export default function ChallengeChatPage() {
           setTypingUsers(prev => {
             const filtered = prev.filter(u => u.userId !== data.userId);
             if (data.isTyping) {
-              return [...filtered, { userId: data.userId, name: data.username || 'User' }];
+              return [...filtered, { userId: data.userId, name: data.username || data.firstName || data.email || data.wallet?.address || 'Profile' }];
             }
             return filtered;
           });
@@ -290,7 +290,7 @@ export default function ChallengeChatPage() {
         type: 'challenge_user_join',
         challengeId,
         userId: user.id,
-        username: user.firstName || user.username || 'User'
+        username: user.firstName || user.username || user.email || user.wallet?.address || 'Profile'
       });
     }
 
@@ -300,7 +300,7 @@ export default function ChallengeChatPage() {
           type: 'challenge_user_leave',
           challengeId,
           userId: user.id,
-          username: user.firstName || user.username || 'User'
+          username: user.firstName || user.username || user.email || user.wallet?.address || 'Profile'
         });
       }
       if (typingTimeoutRef.current) {
@@ -319,7 +319,7 @@ export default function ChallengeChatPage() {
           type: 'user_typing',
           challengeId,
           userId: user.id,
-          username: user.firstName || user.username || 'User',
+          username: user.firstName || user.username || user.email || user.wallet?.address || 'Profile',
           isTyping: true,
         });
 
@@ -330,7 +330,7 @@ export default function ChallengeChatPage() {
                 type: 'user_typing',
                 challengeId,
                 userId: user.id,
-                username: user.firstName || user.username || 'User',
+                username: user.firstName || user.username || user.email || user.wallet?.address || 'Profile',
                 isTyping: false,
               });
             } catch (error) {
@@ -378,7 +378,7 @@ export default function ChallengeChatPage() {
         type: 'user_typing',
         challengeId,
         userId: user.id,
-        username: user.firstName || user.username || 'User',
+        username: user.firstName || user.username || user.email || user.wallet?.address || 'Profile',
         isTyping: false,
       });
     }
@@ -556,7 +556,7 @@ export default function ChallengeChatPage() {
                         <div key={message.id} className={`flex space-x-2 ${isCurrentUser ? 'flex-row-reverse space-x-reverse' : ''} ${isConsecutive ? 'mt-1' : 'mt-3'}`}>
                           {!isCurrentUser && showAvatar && (
                             <div className="flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all rounded-full" onClick={() => msgUser.id && setSelectedProfileUserId(msgUser.id)}>
-                              <UserAvatar userId={msgUser.id} username={msgUser.username} size={24} className="w-6 h-6" />
+                              <UserAvatar userId={msgUser.id} username={msgUser.username} profileImageUrl={msgUser.profileImageUrl ?? msgUser.profileImage ?? null} size={24} className="w-6 h-6" />
                             </div>
                           )}
 
@@ -723,9 +723,9 @@ export default function ChallengeChatPage() {
               <div className="relative">
                 {showMentions && filteredParticipants.length > 0 && (
                   <div className="absolute bottom-full left-0 right-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-t-xl shadow-lg max-h-40 overflow-y-auto z-10">
-                    {filteredParticipants.slice(0, 5).map((participant: any) => (
+                        {filteredParticipants.slice(0, 5).map((participant: any) => (
                       <div key={participant.user.id} className="px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer flex items-center space-x-2" onClick={() => handleMention(participant.user.username || participant.user.firstName)}>
-                        <UserAvatar userId={participant.user.id} username={participant.user.username} size={20} className="w-5 h-5" />
+                        <UserAvatar userId={participant.user.id} username={participant.user.username} profileImageUrl={participant.user.profileImageUrl ?? participant.user.profileImage ?? null} size={20} className="w-5 h-5" />
                         <span className="text-sm">{participant.user.firstName || participant.user.username}</span>
                       </div>
                     ))}

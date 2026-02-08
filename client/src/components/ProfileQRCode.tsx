@@ -343,13 +343,13 @@ export function ProfileQRCode({
           {/* Compact Profile Preview */}
           <div className="flex items-center gap-3 justify-center">
             <Avatar className="w-12 h-12">
-              <AvatarImage 
-                src={getAvatarUrl(userId, displayProfileImage, displayName)} 
-                alt={displayName || 'User'} 
-              />
-              <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
-                {(displayName?.[0] || 'U').toUpperCase()}
-              </AvatarFallback>
+                <AvatarImage 
+                  src={getAvatarUrl(userId, displayProfileImage, displayName)} 
+                  alt={displayName || 'Profile'} 
+                />
+                <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
+                  {(displayName?.[0] || 'P').toUpperCase()}
+                </AvatarFallback>
             </Avatar>
             <div className="text-center">
               <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">

@@ -6,6 +6,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { formatDistanceToNow } from "date-fns";
+import { formatUserDisplayName } from '@/lib/utils';
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -147,16 +148,16 @@ export function LiveChat() {
                 <Avatar className="w-6 h-6 flex-shrink-0">
                   <AvatarImage 
                     src={message.user.profileImageUrl || undefined} 
-                    alt={message.user.firstName || message.user.username || 'User'} 
+                    alt={formatUserDisplayName(message.user) || 'Profile'} 
                   />
                   <AvatarFallback className={`text-xs ${message.user.isTelegramUser ? 'bg-blue-100 text-blue-600' : ''}`}>
-                    {message.user.isTelegramUser ? '📱' : (message.user.firstName?.[0] || message.user.username?.[0] || 'U').toUpperCase()}
+                    {message.user.isTelegramUser ? '📱' : (formatUserDisplayName(message.user)?.[0] || 'U').toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2">
                     <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                      {message.user.firstName || message.user.username || 'Anonymous'}
+                      {formatUserDisplayName(message.user) || 'Anonymous'}
                     </span>
                     {message.source === 'telegram' && (
                       <Badge variant="outline" className="text-xs">

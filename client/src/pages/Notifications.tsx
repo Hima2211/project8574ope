@@ -4,6 +4,7 @@ import { MobileNavigation } from "@/components/MobileNavigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useDailyLoginPopup } from "@/hooks/useDailyLoginPopup";
+import getDisplayName from "@/utils/userDisplay";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -250,8 +251,8 @@ export default function Notifications() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 theme-transition pb-[50px]">
       <DynamicMetaTags 
         pageType="profile"
-        customTitle={`${user?.username || 'User'}'s Notifications on Bantah`}
-        customDescription={`Check ${user?.username || 'User'}'s notifications on Bantah. Stay updated with challenge invites, wins, and activity alerts on the social betting platform.`}
+        customTitle={`${getDisplayName(user) || 'Profile'}'s Notifications on Bantah`}
+        customDescription={`Check ${getDisplayName(user) || 'this user'}'s notifications on Bantah. Stay updated with challenge invites, wins, and activity alerts on the social betting platform.`}
       />
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

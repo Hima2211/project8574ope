@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNotifications } from "@/hooks/useNotifications";
 import { formatDistanceToNow } from "date-fns";
+import { formatUserDisplayName } from '@/lib/utils';
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -395,7 +396,7 @@ export function NotificationCard({ notification, onMarkAsRead }: NotificationCar
         <DialogContent className="sm:max-w-sm max-w-[90vw] max-h-[80vh] overflow-y-auto border-0 shadow-2xl">
           <DialogHeader className="pb-2">
             <DialogTitle className="text-lg font-bold text-center">
-              Challenge {notification.data?.targetName || notification.data?.username || 'User'}
+              Challenge {notification.data?.targetName || notification.data?.username || formatUserDisplayName(notification.data) || 'someone'}
             </DialogTitle>
             <div className="flex justify-center">
               <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">

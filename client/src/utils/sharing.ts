@@ -71,8 +71,8 @@ export function shareProfile(userId: string, userName?: string) {
   return {
     shareUrl,
     shareData: {
-      title: `${userName || 'User'} | Bantah Profile`,
-      description: `Check out ${userName || 'this user'}'s profile on Bantah! Join the social betting platform.`,
+      title: `${userName || 'Profile'} | Bantah Profile`,
+      description: `Check out ${userName || 'this profile'} on Bantah! Join the social betting platform.`,
       url: shareUrl,
       hashtags: ['Bantah', 'Profile', 'SocialBetting']
     }
@@ -170,17 +170,5 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 
 // Generate shareable text with all platform links
 export function generateShareText(shareData: ShareData): string {
-  return `🎯 ${shareData.title}
-
-${shareData.description}
-
-🔗 ${shareData.url}
-
-📱 Share on:
-• Twitter: ${getTwitterShareUrl(shareData)}
-• Facebook: ${getFacebookShareUrl(shareData)}
-• WhatsApp: ${getWhatsAppShareUrl(shareData)}
-• Telegram: ${getTelegramShareUrl(shareData)}
-
-${shareData.hashtags ? '#' + shareData.hashtags.join(' #') : ''}`;
+  return `🎯 ${shareData.title}\n\n${shareData.description}\n\n🔗 ${shareData.url}\n\n📱 Share on:\n• Twitter: ${getTwitterShareUrl(shareData)}\n• Facebook: ${getFacebookShareUrl(shareData)}\n• WhatsApp: ${getWhatsAppShareUrl(shareData)}\n• Telegram: ${getTelegramShareUrl(shareData)}\n\n${shareData.hashtags ? '#' + shareData.hashtags.join(' #') : ''}`;
 }

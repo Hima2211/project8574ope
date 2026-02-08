@@ -12,6 +12,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { MessageCircle, Users, Activity, Send, Trophy, DollarSign, UserPlus, Zap, Heart, MessageSquare, Share2, Reply } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { UserAvatar } from "@/components/UserAvatar";
+import getDisplayName from "@/utils/userDisplay";
 
 interface ExtendedMessage {
   id: string;
@@ -213,7 +214,7 @@ export default function ChallengeChatPage() {
   const handleShareMessage = (messageId: string, messageText: string) => {
     const message = messages.find(m => m.id === messageId);
     if (message) {
-      const shareText = `"${messageText}"\n- ${message.user?.username || message.user?.firstName || `user_${message.userId?.slice(-8) || 'unknown'}`}`;
+      const shareText = `"${messageText}"\n- ${getDisplayName({ profile: message.user }) || `user_${message.userId?.slice(-8) || 'unknown'}`}`;
       if (navigator.share) {
         navigator.share({
           title: 'Shared from Challenge',
@@ -353,13 +354,13 @@ export default function ChallengeChatPage() {
                       <div key={m.id} className={`flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                         {!isMe && (
                           <div className="flex-shrink-0">
-                            <UserAvatar userId={m.userId} username={m.user?.username} size={32} />
+                            <UserAvatar userId={m.userId} username={m.user?.username} profileImageUrl={m.user?.profileImageUrl ?? (m.user as any)?.profileImage ?? null} size={32} />
                           </div>
                         )}
                         <div className={`flex flex-col max-w-[80%] ${isMe ? 'items-end' : 'items-start'}`}>
                           {!isMe && (
                             <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1 ml-1">
-                              {m.user?.username || m.user?.firstName || `user_${m.userId?.slice(-8) || 'unknown'}`}
+                              {getDisplayName({ profile: m.user }) || `user_${m.userId?.slice(-8) || 'unknown'}`}
                             </span>
                           )}
                           <div className={`p-3 rounded-2xl shadow-sm group hover:shadow-md transition-shadow ${
@@ -430,11 +431,11 @@ export default function ChallengeChatPage() {
                           <UserAvatar userId={user?.id} username={user?.username} size={40} />
                           <div className="flex flex-col">
                             <div className="font-medium text-sm text-slate-900 dark:text-slate-100">
-                              {user?.firstName || user?.username || 'User'}
+                              {getDisplayName({ profile: user }) || ''}
                             </div>
                             <div className="text-xs text-slate-500 dark:text-slate-400">Matched with</div>
                             <div className="font-medium text-sm text-slate-900 dark:text-slate-100">
-                              {matched?.firstName || matched?.username || 'Opponent'}
+                              {getDisplayName({ profile: matched }) || 'Opponent'}
                             </div>
                           </div>
                         </div>
@@ -489,7 +490,7 @@ export default function ChallengeChatPage() {
                             {event.user ? (
                               <>
                                 <span className="font-medium">
-                                  {event.user.firstName || event.user.username || 'User'}
+                                  {getDisplayName({ profile: event.user })}
                                 </span>{' '}
                                 <span className="text-slate-600 dark:text-slate-400">{event.action}</span>
                               </>
@@ -518,7 +519,7 @@ export default function ChallengeChatPage() {
             {replyingTo && (
               <div className="flex items-center justify-between px-3 py-2 bg-blue-50 dark:bg-blue-900/30 border-l-2 border-blue-500 rounded">
                 <span className="text-xs text-slate-600 dark:text-slate-400">
-                  Replying to: {messages.find(m => m.id === replyingTo)?.user?.firstName || 'User'}
+                  Replying to: {getDisplayName({ profile: messages.find(m => m.id === replyingTo)?.user }) || ''}
                 </span>
                 <button 
                   onClick={() => setReplyingTo(null)}

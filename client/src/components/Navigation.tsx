@@ -73,6 +73,12 @@ export function Navigation() {
   const { hasProfileBadge } = useBadges();
   const { user: privyUser, getEmbeddedWallet } = usePrivy();
 
+  const { data: profile } = useQuery({
+    queryKey: ["/api/profile"],
+    retry: false,
+    enabled: !!user,
+  });
+
   // Map chain IDs to their native token IDs on CoinGecko
   const CHAIN_TOKEN_MAP: Record<number, string> = {
     84532: 'ethereum',    // Base Sepolia uses ETH
@@ -607,7 +613,8 @@ export function Navigation() {
                 >
                   <UserAvatar
                     userId={user.id}
-                    username={(user as any).username || (typeof user.email === 'string' ? user.email : (user.email as any)?.address)}
+                    username={profile?.username || (user as any).username || (typeof user.email === 'string' ? user.email : (user.email as any)?.address)}
+                    profileImageUrl={profile?.profileImageUrl ?? null}
                     size={32}
                     className="w-full h-full"
                   />

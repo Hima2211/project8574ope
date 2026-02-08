@@ -190,7 +190,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onChatClick }) => {
                     src={
                       event.creator.avatar_url ||
                       event.creator.avatar ||
-                      getAvatarUrl(event.creator.id, event.creator.username)
+                      getAvatarUrl(event.creator.id, event.creator.profileImageUrl, event.creator.username)
                     }
                     alt={event.creator.username || event.creator.name}
                     className="w-full h-full object-cover"
@@ -245,7 +245,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onChatClick }) => {
                     <img
                       src={
                         event.participants?.[0]?.avatar ||
-                        getAvatarUrl(event.participants?.[0]?.id || `participant-${event.id}`, event.participants?.[0]?.username)
+                        getAvatarUrl(event.participants?.[0]?.id || `participant-${event.id}`, event.participants?.[0]?.profileImageUrl, event.participants?.[0]?.username)
                       }
                       alt="Participant"
                       className="w-full h-full object-cover"

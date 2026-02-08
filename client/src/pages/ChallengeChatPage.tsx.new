@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { UserAvatar } from "@/components/UserAvatar";
+import { getDisplayName } from '@/utils/userDisplay';
 import { TypingIndicator } from "@/components/TypingIndicator";
 import { HeaderWithAuth } from "@/components/HeaderWithAuth";
 import { MessageCircle, Users, Activity } from "lucide-react";
@@ -146,7 +147,7 @@ export default function ChallengeChatPage() {
           setTypingUsers(prev => {
             const filtered = prev.filter(u => u.userId !== data.userId);
             if (data.isTyping) {
-              return [...filtered, { userId: data.userId, name: data.username || 'User' }];
+              return [...filtered, { userId: data.userId, name: getDisplayName({ profile: data }) || 'Profile' }];
             }
             return filtered;
           });
@@ -290,7 +291,7 @@ export default function ChallengeChatPage() {
         type: 'challenge_user_join',
         challengeId,
         userId: user.id,
-        username: user.firstName || user.username || 'User'
+        username: getDisplayName({ profile: user }) || 'Profile'
       });
     }
 
@@ -300,7 +301,7 @@ export default function ChallengeChatPage() {
           type: 'challenge_user_leave',
           challengeId,
           userId: user.id,
-          username: user.firstName || user.username || 'User'
+          username: getDisplayName({ profile: user }) || 'Profile'
         });
       }
       if (typingTimeoutRef.current) {
@@ -319,7 +320,7 @@ export default function ChallengeChatPage() {
           type: 'user_typing',
           challengeId,
           userId: user.id,
-          username: user.firstName || user.username || 'User',
+          username: getDisplayName({ profile: user }) || 'Profile',
           isTyping: true,
         });
 
@@ -330,7 +331,7 @@ export default function ChallengeChatPage() {
                 type: 'user_typing',
                 challengeId,
                 userId: user.id,
-                username: user.firstName || user.username || 'User',
+                username: getDisplayName({ profile: user }) || 'Profile',
                 isTyping: false,
               });
             } catch (error) {
@@ -378,7 +379,7 @@ export default function ChallengeChatPage() {
         type: 'user_typing',
         challengeId,
         userId: user.id,
-        username: user.firstName || user.username || 'User',
+        username: getDisplayName({ profile: user }) || 'Profile',
         isTyping: false,
       });
     }

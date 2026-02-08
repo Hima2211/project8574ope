@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Camera, Mail, Lock, ArrowLeft, Check, Save } from "lucide-react";
 import { getAvatarUrl } from "@/utils/avatarUtils";
+import { formatUserDisplayName } from '@/lib/utils';
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ProfileFormData {
@@ -57,7 +58,7 @@ export default function ProfileEdit() {
         firstName: (profileData as any).firstName || "",
         username: (profileData as any).username || "",
         bio: (profileData as any).bio || "",
-        profileImageUrl: (profileData as any).profileImageUrl || generateDefaultAvatar((profileData as any).firstName || "User"),
+        profileImageUrl: (profileData as any).profileImageUrl || generateDefaultAvatar(formatUserDisplayName(profileData as any) || ""),
       };
       setFormData(userData);
       setOriginalFormData(userData);
@@ -71,7 +72,7 @@ export default function ProfileEdit() {
   }, [formData, originalFormData]);
 
   const generateDefaultAvatar = (name: string) => {
-    return getAvatarUrl("", name);
+    return getAvatarUrl("", undefined, name);
   };
 
   const updateProfileMutation = useMutation({

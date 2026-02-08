@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import type { AppUser } from '@/types/user';
 import { usePrivy } from "@privy-io/react-auth";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import MobileLayout from "@/components/MobileLayout";
@@ -11,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { formatBalance } from "@/utils/currencyUtils";
 import { getAvatarUrl } from "@/utils/avatarUtils";
+import { getDisplayName, getUsernameOrAddress } from '@/utils/userUtils';
 import { getLevelIcon, getLevelName } from "@/utils/levelSystem";
 import { useLocation } from "wouter";
 import {
@@ -30,6 +32,7 @@ import { ProfileQRCode } from "@/components/ProfileQRCode";
 
 export default function Profile() {
   const { user, logout } = useAuth();
+  const currentUser = user as unknown as AppUser | null;
   const { user: privyUser } = usePrivy();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -42,8 +45,8 @@ export default function Profile() {
   });
 
   const { data: userProfile } = useQuery({
-    queryKey: [`/api/users/${user.id}/profile`],
-    enabled: !!user?.id,
+    queryKey: [`/api/users/${currentUser?.id}/profile`],
+    enabled: !!currentUser?.id,
     retry: false,
   });
 
@@ -69,12 +72,11 @@ export default function Profile() {
     : null;
 
   // Prefer wallet address as display name if connected, otherwise use the old logic
-  const displayName = truncatedAddress || 
-    userProfile?.firstName || user.firstName || (user as any)?.name || userProfile?.username || user.username || 'User'
-  const usernameToShow = truncatedAddress || userProfile?.username || user.username || '';
+  const displayName = truncatedAddress || getDisplayName(userProfile || currentUser);
+  const usernameToShow = truncatedAddress || getUsernameOrAddress(userProfile || currentUser) || '';
 
   const shareProfile = () => {
-    const currentUsername = usernameToShow || userProfile?.username || user.username;
+    const currentUsername = usernameToShow || userProfile?.username || currentUser?.username;
     if (!currentUsername) {
       toast({
         title: "Error",
@@ -102,8 +104,8 @@ export default function Profile() {
   };
 
   const handleCopyReferralCode = async () => {
-    if (user?.referralCode) {
-      await navigator.clipboard.writeText(user.referralCode);
+    if (currentUser?.referralCode) {
+      await navigator.clipboard.writeText(currentUser.referralCode as string);
       toast({
         title: "Copied!",
         description: "Referral code copied to clipboard",
@@ -117,7 +119,7 @@ export default function Profile() {
         pageType="profile"
         customTitle={`${displayName}'s Profile on Bantah`}
         customDescription={`Check out ${displayName}'s profile on Bantah - the social betting and challenges platform. Level ${user?.level || 1} player.`}
-        customImage={getAvatarUrl(user?.id, user?.username || displayName)}
+        customImage={getAvatarUrl(user?.id, userProfile?.profileImageUrl, user?.username || displayName)}
       />
       <div className="min-h-screen theme-transition flex flex-col pb-[50px]">
         <div className="flex-1 flex flex-col items-center w-full">
@@ -134,7 +136,7 @@ export default function Profile() {
                   <div className="relative">
                     <Avatar className="w-24 h-24">
                       <AvatarImage
-                        src={getAvatarUrl(user?.id, user?.username || displayName)}
+                        src={getAvatarUrl(user?.id, userProfile?.profileImageUrl, user?.username || displayName)}
                         alt={displayName}
                       />
                       <AvatarFallback className="text-2xl bg-primary/10 text-primary">

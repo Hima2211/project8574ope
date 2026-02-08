@@ -20,6 +20,8 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatBalance } from "@/utils/currencyUtils";
+import { formatUserDisplayName } from '@/lib/utils';
+import { getDisplayName } from '@/utils/userDisplay';
 import { getCurrencySymbol } from "@/lib/utils";
 import { UserAvatar } from "@/components/UserAvatar";
 import { getLevelColor, getLevelIcon, getLevelName } from "@/utils/levelSystem";
@@ -192,7 +194,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ userId, onClose }) => {
       queryClient.invalidateQueries({ queryKey: [`/api/users/${userId}/profile`] });
       toast({
         title: "Tip Sent",
-        description: `Successfully sent ${formatBalance(parseInt(tipAmount))} to ${profile?.firstName || profile?.username || 'User'}`,
+        description: `Successfully sent ${formatBalance(parseInt(tipAmount))} to ${formatUserDisplayName(profile) || 'someone'}`,
       });
       setShowTipModal(false);
       setTipAmount('');
@@ -247,7 +249,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ userId, onClose }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/challenges"] });
       toast({
         title: "Challenge Sent",
-        description: `Challenge sent to ${profile?.firstName || profile?.username}`,
+        description: `Challenge sent to ${formatUserDisplayName(profile) || 'someone'}`,
       });
       setShowChallengeModal(false);
       setChallengeTitle('');
@@ -456,6 +458,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ userId, onClose }) => {
                   <UserAvatar
                     userId={profile.id || userId}
                     username={profile.username}
+                    profileImageUrl={profile?.profileImageUrl ?? (profile as any)?.profileImage ?? null}
                     size={64}
                     className="w-14 h-14 md:w-16 md:h-16 border-2 md:border-3 border-white dark:border-slate-900 shadow-sm"
                   />
@@ -474,7 +477,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ userId, onClose }) => {
               {/* Profile Info - More compact on mobile */}
               <div className="text-center space-y-0.5 md:space-y-1 mb-2 md:mb-3">
                 <h2 className="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100">
-                  {profile?.username || 'User'}
+                  {getDisplayName({ profile }) || 'Profile'}
                 </h2>
               </div>
 

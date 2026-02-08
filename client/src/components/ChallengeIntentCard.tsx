@@ -13,6 +13,7 @@ import {
   Star,
   Crown
 } from "lucide-react";
+import { getDisplayName } from '@/utils/userDisplay';
 
 interface ChallengeIntentCardProps {
   challenge: {
@@ -50,11 +51,11 @@ export function ChallengeIntentCard({
   showActions = true 
 }: ChallengeIntentCardProps) {
   const getChallengerName = () => {
-    return challenge.challengerUser.username || challenge.challengerUser.firstName || 'User';
+    return getDisplayName({ profile: challenge.challengerUser }) || 'Profile';
   };
 
   const getChallengedName = () => {
-    return challenge.challengedUser.username || challenge.challengedUser.firstName || 'User';
+    return getDisplayName({ profile: challenge.challengedUser }) || 'Profile';
   };
 
   const getStatusIcon = (status: string) => {

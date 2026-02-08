@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { getDisplayName } from '@/utils/userDisplay';
 import { useLocation } from 'wouter';
 
 interface Challenge {
@@ -48,13 +49,13 @@ export function DynamicMetaTags({
       let description = customDescription || 'Join the ultimate social betting platform. Predict events, challenge friends, and win big.';
       let image = customImage || `${baseUrl}/assets/bantahlogo.png`;
       let url = `${baseUrl}${location}`;
-      let challengerName = 'User';
-      let challengedName = 'User';
+      let challengerName = '';
+      let challengedName = '';
 
       // Challenge-specific meta tags
       if (pageType === 'challenge' && challenge) {
-        challengerName = challenge.challengerUser?.username || challenge.challengerUser?.firstName || 'User';
-        challengedName = challenge.challengedUser?.username || challenge.challengedUser?.firstName || 'User';
+        challengerName = getDisplayName({ profile: challenge.challengerUser }) || 'Profile';
+        challengedName = getDisplayName({ profile: challenge.challengedUser }) || 'Profile';
         
         title = `${challenge.title} - ${challengerName} vs ${challengedName} | Bantah`;
         description = `🎯 CHALLENGE: "${challenge.title}" - ${challengerName} challenges ${challengedName} for $${challenge.amount} in ${challenge.category}. Join Bantah to see the action!`;

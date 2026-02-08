@@ -61,7 +61,7 @@
                   <div className="absolute bottom-full left-0 right-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-t-xl shadow-lg max-h-40 overflow-y-auto z-10">
                     {filteredParticipants.slice(0, 5).map((participant: any) => (
                       <div key={participant.user.id} className="px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer flex items-center space-x-2" onClick={() => handleMention(participant.user.username || participant.user.firstName)}>
-                        <UserAvatar userId={participant.user.id} username={participant.user.username} size={20} className="w-5 h-5" />
+                        <UserAvatar userId={participant.user.id} username={participant.user.username} profileImageUrl={participant.user.profileImageUrl ?? participant.user.profileImage ?? null} size={20} className="w-5 h-5" />
                         <span className="text-sm">{participant.user.firstName || participant.user.username}</span>
                       </div>
                     ))}

@@ -1116,7 +1116,7 @@ export default function Challenges() {
                               setOpponentSearchTerm("");
                             }}
                       >
-                        <UserAvatar userId={u.id} username={u.username} className="h-5 w-5" />
+                        <UserAvatar userId={u.id} username={u.username} profileImageUrl={u.profileImageUrl ?? u.profileImage ?? null} className="h-5 w-5" />
                         <div className="flex flex-col flex-1 min-w-0">
                           <p className="font-semibold text-slate-900 dark:text-slate-100 text-xs">@{u.username}</p>
                         </div>
@@ -1126,7 +1126,7 @@ export default function Challenges() {
                 )}
                 {preSelectedUser && (
                   <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#7440FF]/10 dark:bg-[#7440FF]/5 border border-[#7440FF]/20 text-xs">
-                    <UserAvatar userId={preSelectedUser.id} username={preSelectedUser.username} className="h-5 w-5" />
+                    <UserAvatar userId={preSelectedUser.id} username={preSelectedUser.username} profileImageUrl={preSelectedUser.profileImageUrl ?? preSelectedUser.profileImage ?? null} className="h-5 w-5" />
                     <p className="flex-1 font-semibold text-xs">@{preSelectedUser.username}</p>
                     <Button 
                       variant="ghost" 

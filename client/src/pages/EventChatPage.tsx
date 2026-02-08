@@ -27,6 +27,7 @@ import {
 import { formatBalance } from "@/utils/currencyUtils";
 import { getAvatarUrl } from "@/utils/avatarUtils";
 import { UserAvatar } from "@/components/UserAvatar";
+import getDisplayName, { truncateAddress } from "@/utils/userDisplay";
 import { TypingIndicator } from "@/components/TypingIndicator";
 import PushNotificationTest from "@/components/PushNotificationTest";
 
@@ -198,7 +199,7 @@ export default function EventChatPage() {
           setTypingUsers(prev => {
             const filtered = prev.filter(u => u.userId !== data.userId);
             if (data.isTyping) {
-              return [...filtered, { userId: data.userId, name: data.username || 'User' }];
+              return [...filtered, { userId: data.userId, name: data.username || truncateAddress(data.userId) }];
             }
             return filtered;
           });
@@ -426,11 +427,11 @@ export default function EventChatPage() {
   // Send join notification when user enters the chat
   useEffect(() => {
     if (user && eventId && sendMessage && isConnected) {
-      sendMessage({
+        sendMessage({
         type: 'user_join',
         eventId,
         userId: user.id,
-        username: user.firstName || user.username || 'User'
+        username: getDisplayName({ authUser: user }) || truncateAddress(user.id)
       });
     }
 
@@ -441,7 +442,7 @@ export default function EventChatPage() {
           type: 'user_leave',
           eventId,
           userId: user.id,
-          username: user.firstName || user.username || 'User'
+          username: getDisplayName({ authUser: user }) || truncateAddress(user.id)
         });
       }
 
@@ -465,7 +466,7 @@ export default function EventChatPage() {
           type: 'user_typing',
           eventId,
           userId: user.id,
-          username: user.firstName || user.username || 'User',
+          username: getDisplayName({ authUser: user }) || truncateAddress(user.id),
           isTyping: true,
         });
 
@@ -476,7 +477,7 @@ export default function EventChatPage() {
                 type: 'user_typing',
                 eventId,
                 userId: user.id,
-                username: user.firstName || user.username || 'User',
+                username: getDisplayName({ authUser: user }) || truncateAddress(user.id),
                 isTyping: false,
               });
             } catch (error) {
@@ -535,7 +536,7 @@ export default function EventChatPage() {
         type: 'user_typing',
         eventId,
         userId: user.id,
-        username: user.firstName || user.username || 'User',
+        username: getDisplayName({ authUser: user }) || truncateAddress(user.id),
         isTyping: false,
       });
     }
@@ -967,6 +968,7 @@ export default function EventChatPage() {
                       <UserAvatar
                         userId={msgUser.id}
                         username={msgUser.username}
+                        profileImageUrl={msgUser.profileImageUrl ?? msgUser.profileImage ?? null}
                         size={24}
                         className="w-6 h-6"
                       />
@@ -1122,6 +1124,7 @@ export default function EventChatPage() {
                     <UserAvatar
                       userId={message.user.id}
                       username={message.user.username}
+                      profileImageUrl={message.user.profileImageUrl ?? message.user.profileImage ?? null}
                       size={16}
                       className="w-4 h-4"
                     />
@@ -1193,6 +1196,7 @@ export default function EventChatPage() {
                     <UserAvatar
                       userId={participant.user.id}
                       username={participant.user.username}
+                      profileImageUrl={participant.user.profileImageUrl ?? participant.user.profileImage ?? null}
                       size={20}
                       className="w-5 h-5"
                     />

@@ -16,6 +16,7 @@ import { formatDistanceToNow } from "date-fns";
 import { LevelBadge } from "@/components/LevelBadge";
 import { formatBalance } from "@/utils/currencyUtils";
 import { getAvatarUrl } from "@/utils/avatarUtils";
+import getDisplayName from "@/utils/userDisplay";
 
 export default function PublicProfile() {
   const { username } = useParams();
@@ -123,7 +124,7 @@ export default function PublicProfile() {
           <Avatar className="w-16 h-16">
             <AvatarImage 
               src={getAvatarUrl(profile.id, profile.profileImageUrl, profile.firstName || profile.username)} 
-              alt={profile.firstName || profile.username || 'User'} 
+              alt={getDisplayName({ profile }) || ''} 
             />
             <AvatarFallback className="text-lg">
               {(profile.firstName?.[0] || profile.username?.[0] || 'U').toUpperCase()}
@@ -132,7 +133,7 @@ export default function PublicProfile() {
 
           <div className="flex-1">
             <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              {profile.firstName || profile.username}
+              {getDisplayName({ profile })}
             </h1>
             <p className="text-sm text-slate-600 dark:text-slate-400">@{profile.username}</p>
             <div className="flex items-center space-x-4 mt-1">
@@ -194,7 +195,7 @@ export default function PublicProfile() {
               <Avatar className="w-32 h-32">
                 <AvatarImage 
                   src={getAvatarUrl(profile.id, profile.profileImageUrl, profile.firstName || profile.username)} 
-                  alt={profile.firstName || profile.username || 'User'} 
+                  alt={getDisplayName({ profile }) || ''} 
                 />
                 <AvatarFallback className="text-2xl">
                   {(profile.firstName?.[0] || profile.username?.[0] || 'U').toUpperCase()}
@@ -205,7 +206,7 @@ export default function PublicProfile() {
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
                   <div>
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-                      {profile.firstName || profile.username}
+                      {getDisplayName({ profile })}
                     </h1>
                     <p className="text-slate-600 dark:text-slate-400">
                       @{profile.username}

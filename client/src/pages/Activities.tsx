@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import getDisplayName from "@/utils/userDisplay";
 import { useLocation } from "wouter";
 import { DynamicMetaTags } from "@/components/DynamicMetaTags";
 import { MobileNavigation } from "@/components/MobileNavigation";
@@ -436,7 +437,7 @@ export default function Activities() {
                 </h3>
                 {challengedUser && (
                   <span className="text-xs text-gray-600 dark:text-gray-400 flex-shrink-0">
-                    vs {challengedUser.username || challengedUser.firstName || 'User'}
+                    vs {getDisplayName({ profile: challengedUser })}
                   </span>
                 )}
                 <Badge className={`text-xs px-1.5 py-0.5 h-5 ${getStatusBadge(activity)} flex-shrink-0`}>
@@ -606,8 +607,8 @@ export default function Activities() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 theme-transition pb-[50px]">
       <DynamicMetaTags 
         pageType="profile"
-        customTitle={`${(user as any)?.username || 'User'}'s Activities on Bantah`}
-        customDescription={`Check out ${(user as any)?.username || 'User'}'s activity history on Bantah. Challenges created, active contests, wins, and more on the social betting platform.`}
+        customTitle={`${getDisplayName(user) || 'Profile'}'s Activities on Bantah`}
+        customDescription={`Check out ${getDisplayName(user) || 'this user'}'s activity history on Bantah. Challenges created, active contests, wins, and more on the social betting platform.`}
       />
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Compact Tab Navigation */}

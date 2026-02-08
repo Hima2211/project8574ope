@@ -119,6 +119,7 @@ function UserCard({ user, onClose }: { user: MapUser; onClose: () => void }) {
             <UserAvatar 
               userId={user.id} 
               username={user.username || undefined} 
+              profileImageUrl={user.profileImageUrl ?? user.profileImage ?? null}
               size={80} 
               className={`ring-4 ${zone.borderColor} ring-offset-2`}
             />

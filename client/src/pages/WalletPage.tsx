@@ -205,14 +205,15 @@ export default function WalletPage() {
 
   // Auto-sync Privy wallet to database when connected
   useEffect(() => {
-    if (!user?.id || !privyUser?.wallet?.address) {
+    const privyAddress = privyUser?.wallet?.address;
+    if (!user?.id || !privyAddress) {
       return; // No user or wallet connected
     }
 
     const syncWallet = async () => {
       try {
         await apiRequest("POST", "/api/points/connect-wallet", {
-          walletAddress: privyUser.wallet.address,
+          walletAddress: privyAddress,
           walletType: "privy",
         });
 
@@ -232,6 +233,9 @@ export default function WalletPage() {
 
     syncWallet();
   }, [user?.id, privyUser?.wallet?.address, queryClient]);
+
+  // Cache privy wallet address for safer reuse below
+  const privyAddress = privyUser?.wallet?.address;
 
   const { data: balance = { balance: 0 }, isLoading: balanceLoading } = useQuery({
     queryKey: ["/api/wallet/balance"],
@@ -324,10 +328,10 @@ export default function WalletPage() {
       }
     : null;
   
-  const privyFallback = privyUser?.wallet?.address && !externalWallet
+  const privyFallback = privyAddress && !externalWallet
     ? {
         id: 'privy-fallback',
-        address: privyUser.wallet.address,
+        address: privyAddress,
         type: 'privy',
         isPrimary: !serverPrimary && !externalWallet,
         usdcBalance: null,

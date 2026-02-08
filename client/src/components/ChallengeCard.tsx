@@ -859,6 +859,7 @@ export function ChallengeCard({
                           challenge.challengerUser?.profileImageUrl ||
                           getAvatarUrl(
                             challenge.challengerUser?.id || "",
+                            challenge.challengerUser?.profileImageUrl,
                             challengerName,
                           )
                         }
@@ -878,6 +879,7 @@ export function ChallengeCard({
                           challenge.challengedUser?.profileImageUrl ||
                           getAvatarUrl(
                             challenge.challengedUser?.id || "",
+                            challenge.challengedUser?.profileImageUrl,
                             challengedName,
                           )
                         }

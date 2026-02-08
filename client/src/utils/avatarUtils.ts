@@ -27,7 +27,13 @@ export const generateAvatar = (seed: string, size: number = 128) => {
   return `/assets/avatar/${AVATAR_FILES[index]}`;
 };
 
-export function getAvatarUrl(userId: string, username?: string, size: number = 128): string {
-  const seed = userId || username || 'default';
+export function getAvatarUrl(userId: string, profileImageUrl?: string | null, usernameFallback?: string, size: number = 128): string {
+  // If a custom profile image URL is provided and is not empty, use it
+  if (profileImageUrl && profileImageUrl.trim() !== '') {
+    return profileImageUrl;
+  }
+  
+  // Otherwise, generate a default avatar based on userId or username
+  const seed = userId || usernameFallback || 'default';
   return generateAvatar(seed, size);
 }

@@ -31,6 +31,11 @@ export function MobileNavigation({
     refetchInterval: 60000, // Refetch every minute instead of constant polling
   });
 
+  const { data: profile } = useQuery({
+    queryKey: ["/api/profile"],
+    retry: false,
+    enabled: !!user,
+  });
   const [location, navigate] = useLocation();
 
   // UserAvatar component will handle the avatar generation consistently
@@ -135,7 +140,8 @@ export function MobileNavigation({
                   >
                     <UserAvatar
                       userId={user.id}
-                      username={user.username || (typeof user.email === 'string' ? user.email : user.email?.address)}
+                      username={profile?.username || user.username || (typeof user.email === 'string' ? user.email : user.email?.address)}
+                      profileImageUrl={profile?.profileImageUrl ?? null}
                       size={20}
                       className="w-full h-full"
                     />
