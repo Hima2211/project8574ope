@@ -114,6 +114,8 @@ export default function WalletPage() {
   const [claimableChallenges, setClaimableChallenges] = useState<any[]>([]);
   const [claiming, setClaiming] = useState<boolean>(false);
   const [chartDays, setChartDays] = useState<7 | 30>(7);
+  const [pointsHistory, setPointsHistory] = useState<any[] | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   
   // Get current chain ID early to use in queries
   const chainId = useChain((state) => state.currentChainId);
@@ -447,9 +449,24 @@ export default function WalletPage() {
       })()
     : 'No connected wallet';
 
-  const currentPointsDisplay = pointsData?.balanceFormatted ?? '0';
+  const currentPointsDisplay = (() => {
+    // If backend provides a human-readable formatted balance, prefer it
+    const formatted = pointsData?.balanceFormatted;
+    if (formatted && Number(formatted) > 0) return formatted;
+
+    // Fallback: if the ledger row has a pointsBalance (stored in whole points), show that
+    if (pointsData?.pointsBalance !== undefined && pointsData?.pointsBalance !== null) {
+      return formatTokenAmount(Number(pointsData.pointsBalance), 0, 2);
+    }
+
+    // Last resort: if raw balance (likely wei) is present, convert from 1e18
+    if (pointsData?.balance) return (Number(pointsData.balance) / 1e18).toFixed(2);
+
+    return '0';
+  })();
+
   const currentPointsShort = (() => {
-    const n = parseFloat(String(pointsData?.balanceFormatted ?? '0')) || 0;
+    const n = parseFloat(String(currentPointsDisplay || '0')) || 0;
     return n > 999 ? '1K+' : Math.round(n).toString();
   })();
 
@@ -531,6 +548,44 @@ export default function WalletPage() {
                   </div>
                 )}
               </div>
+                {/* DEV: raw debug info from points API */}
+                {import.meta.env.DEV && (
+                  <div className="mt-2">
+                    <details className="text-xs text-slate-600 dark:text-slate-400">
+                      <summary className="cursor-pointer">Debug: points API response</summary>
+                      <pre className="mt-2 text-[11px] p-2 bg-slate-100 dark:bg-slate-900 rounded">{JSON.stringify(pointsData || {}, null, 2)}</pre>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          className="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700"
+                          onClick={async () => {
+                            if (!user?.id) return;
+                            setLoadingHistory(true);
+                            try {
+                              const res = await apiRequest('GET', `/api/points/history/${user.id}`);
+                              setPointsHistory(res.transactions || res);
+                            } catch (err) {
+                              console.error('Failed to load points history', err);
+                              setPointsHistory([{ error: String(err) }]);
+                            } finally {
+                              setLoadingHistory(false);
+                            }
+                          }}
+                        >
+                          {loadingHistory ? 'Loading…' : 'Load Points History'}
+                        </button>
+                        <button
+                          className="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700"
+                          onClick={() => setPointsHistory(null)}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      {pointsHistory && (
+                        <pre className="mt-2 text-[11px] p-2 bg-slate-50 dark:bg-slate-900 rounded max-h-64 overflow-auto">{JSON.stringify(pointsHistory, null, 2)}</pre>
+                      )}
+                    </details>
+                  </div>
+                )}
             </div>
           </div>
         </div>

@@ -5,44 +5,38 @@
 
 /**
  * Calculate points for challenge creation
- * Formula: 50 + (Challenge Amount × 5) = MAX 500 pts
+ * Fixed amount: 20 pts (capped at 500 max)
  * 
- * @param challengeAmountUSD Challenge amount in USD
+ * @param challengeAmountUSD Challenge amount in USD (not used in new system)
  * @returns Points earned (capped at 500)
  */
 export function calculateCreationPoints(challengeAmountUSD: number): number {
-  const basePoints = 50;
-  const multiplier = 5;
+  const fixedPoints = 20;
   const maxPoints = 500;
-  
-  const calculatedPoints = basePoints + (challengeAmountUSD * multiplier);
-  return Math.min(calculatedPoints, maxPoints);
+  return Math.min(fixedPoints, maxPoints);
 }
 
 /**
- * Calculate points for challenge participation (joining)
- * Formula: 10 + (Challenge Amount × 4) = MAX 500 pts
+ * Calculate points for challenge participation (joining/winning)
+ * Fixed amount: 30 pts (capped at 500 max)
  * 
- * @param challengeAmountUSD Challenge amount in USD
+ * @param challengeAmountUSD Challenge amount in USD (not used in new system)
  * @returns Points earned (capped at 500)
  */
 export function calculateParticipationPoints(challengeAmountUSD: number): number {
-  const basePoints = 10;
-  const multiplier = 4;
+  const fixedPoints = 30;
   const maxPoints = 500;
-  
-  const calculatedPoints = basePoints + (challengeAmountUSD * multiplier);
-  return Math.min(calculatedPoints, maxPoints);
+  return Math.min(fixedPoints, maxPoints);
 }
 
 /**
  * Calculate points for successful referral (one-time per user)
- * Fixed amount: 200 pts
+ * Fixed amount: 30 pts per side (referrer and referred both get 30)
  * 
  * @returns Fixed referral points
  */
 export function calculateReferralPoints(): number {
-  return 200;
+  return 30;
 }
 
 /**

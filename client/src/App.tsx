@@ -1,7 +1,7 @@
 import React, { useEffect, useState, Suspense, lazy } from "react";
 import { Router, Switch, Route, useLocation, useParams } from "wouter";
 import { apiRequest, queryClient, initializeAuthToken } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
@@ -86,7 +86,7 @@ function ChallengeDetailRouter() {
 
   console.log('ChallengeDetailRouter: Received params:', params, 'id:', id);
 
-  const { data: challenge, isLoading, error } = React.useQuery({
+  const { data: challenge, isLoading, error } = useQuery({
     queryKey: [`/api/challenges/${id}`],
     enabled: !!id,
     retry: false,

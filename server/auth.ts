@@ -103,6 +103,15 @@ export function setupAuth(app: Express) {
       const hashedPassword = await hashPassword(validatedData.password);
       const userId = nanoid();
 
+      // Fetch referrer if referral code provided
+      let referrerUser = null;
+      if (validatedData.referralCode) {
+        referrerUser = await storage.getUserByReferralCode(validatedData.referralCode);
+      }
+
+      // Calculate signup bonus: 20 points (or 30 if referred)
+      const signupBonus = referrerUser ? 30 : 20;
+
       const user = await storage.upsertUser({
         id: userId,
         email: validatedData.email,
@@ -112,53 +121,34 @@ export function setupAuth(app: Express) {
         username: validatedData.username || `user_${userId.slice(0, 8)}`,
         level: 1,
         xp: 0,
-        points: bonusPoints,
+        points: signupBonus, // ✅ 20 points base, 30 if referred
         balance: "0.00",
         streak: 0,
         status: "active",
         isAdmin: false,
         isTelegramUser: false,
-        coins: bonusCoins,
+        coins: 0,
         referralCode: validatedData.username || `user_${userId.slice(0, 8)}`,
         referredBy: referrerUser?.id || null,
       });
 
-      // Create welcome notification and transaction for new user signup bonus
+      // Create welcome notification with points info
       const welcomeMessage = referrerUser 
-        ? `You received ${bonusPoints} points and ${bonusCoins} coins for joining through a referral! Start betting and challenging friends to earn more.`
-        : 'You received 1000 points for joining! Start betting and challenging friends to earn more.';
+        ? `🎁 Welcome to Bantah! You received ${signupBonus} Bantah Points for signing up via referral. Start creating and joining challenges to earn more.`
+        : `🎉 Welcome to Bantah! You received ${signupBonus} Bantah Points. Start creating and joining challenges to earn more.`;
 
       await storage.createNotification({
         userId: user.id,
         type: 'welcome_bonus',
-        title: referrerUser ? '🎁 Referral Welcome Bonus!' : '🎉 Welcome to Bantah!',
+        title: '🎉 Welcome to Bantah!',
         message: welcomeMessage,
-        data: { points: bonusPoints, coins: bonusCoins, type: 'welcome_bonus' },
+        data: { type: 'welcome_message' },
       });
-
-      // Create transaction records
-      await storage.createTransaction({
-        userId: user.id,
-        type: 'signup_bonus',
-        amount: bonusPoints.toString(),
-        description: referrerUser ? 'Referral signup bonus' : 'Welcome bonus for new user registration',
-        status: 'completed',
-      });
-
-      if (bonusCoins > 0) {
-        await storage.createTransaction({
-          userId: user.id,
-          type: 'referral_bonus',
-          amount: bonusCoins.toString(),
-          description: 'Referral bonus coins for new user',
-          status: 'completed',
-        });
-      }
 
       // Process referral rewards if applicable
       if (referrerUser) {
-        // Give referrer bonus - 200 Bantah Points (new system) for successful referral
-        const referrerBonus = 200; // Bantah Points for successful referral (one-time per user)
+        // Give referrer bonus - 30 Bantah Points (calculated via calculateReferralPoints)
+        const referrerBonus = 30; // ✅ Standard referral bonus - capped at 500 hard limit
 
         await storage.updateUserPoints(referrerUser.id, referrerBonus);
 
@@ -191,7 +181,7 @@ export function setupAuth(app: Express) {
           userId: referrerUser.id,
           type: 'referral_reward',
           amount: referrerBonus.toString(),
-          description: `Referral bonus - ${referrerBonus} Bantah Points for ${user.firstName} joining (one-time)`,
+          description: `Referral bonus - ${referrerBonus} Bantah Points for ${user.firstName} joining`,
           status: 'completed',
         });
       }

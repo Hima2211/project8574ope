@@ -216,9 +216,9 @@ router.post('/create-admin', PrivyAuthMiddleware, async (req: Request, res: Resp
 
     console.log(`\n💾 Creating admin challenge from ${userId}...`);
 
-    // Calculate creation points based on stake amount (50 + amount × 5, MAX 500)
+    // Calculate creation points using the new system (20 points fixed)
     const stakeAmountUSD = parseInt(stakeAmount); // USDC/USDT amounts are in USD equivalent
-    const creationPoints = Math.min(50 + (stakeAmountUSD * 5), 500);
+    const creationPoints = calculateCreationPoints(stakeAmountUSD);
     console.log(`🎁 Challenge creator will earn ${creationPoints} Bantah Points`);
 
     // Parse and validate dueDate (optional). Default to 24h from now if not provided.
@@ -377,7 +377,7 @@ router.post('/create-p2p', PrivyAuthMiddleware, upload.single('coverImage'), asy
     }
 
     const stakeAmountUSD = parseFloat(stakeAmount);
-    const creationPoints = Math.min(50 + (stakeAmountUSD * 5), 500);
+    const creationPoints = calculateCreationPoints(stakeAmountUSD);
 
     const isNativeETH = paymentToken === '0x0000000000000000000000000000000000000000' || paymentToken?.toLowerCase() === '0x0000000000000000000000000000000000000000';
     const tokenDecimals = isNativeETH ? 18 : 6;
@@ -917,9 +917,9 @@ router.post('/:id/join', PrivyAuthMiddleware, async (req: Request, res: Response
 
     const challenge = dbChallenge[0];
 
-    // Calculate participation points based on stake amount (10 + amount × 4, MAX 500)
+    // Calculate participation points using the new system (30 points fixed)
     const stakeAmountUSD = challenge.stakeAmountWei ? Number(challenge.stakeAmountWei) / 1e6 : 0; // Convert from wei to USD
-    const participationPoints = Math.min(10 + (stakeAmountUSD * 4), 500);
+    const participationPoints = calculateParticipationPoints(stakeAmountUSD);
     console.log(`🎁 Challenge participant will earn ${participationPoints} Bantah Points`);
 
     // Get on-chain challenge
@@ -1514,7 +1514,8 @@ router.post('/:challengeId/accept-open', PrivyAuthMiddleware, async (req: Reques
     });
 
     // Award Bantah Points for joining
-    const joiningPoints = Math.min(10 + Math.floor(challenge.amount * 4), 500);
+    const stakePerSideUSD = (challenge.amount / 2); // Per-side stake amount
+    const joiningPoints = calculateParticipationPoints(stakePerSideUSD);
     const pointsWei = BigInt(joiningPoints) * BigInt(1e18);
     
     await recordPointsTransaction({
