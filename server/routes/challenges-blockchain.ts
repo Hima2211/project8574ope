@@ -167,7 +167,7 @@ router.post(
             await db.insert(transactions).values({
               userId: winnerId,
               type: 'challenge_won',
-              amount: pointsAwarded.toString(),
+              amount: pointsAwarded.toFixed(2),
               description: `Won challenge "${challengeTitle}" against @${loserName}`,
               status: 'completed',
               createdAt: new Date(),

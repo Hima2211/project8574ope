@@ -180,7 +180,7 @@ export function setupAuth(app: Express) {
         await storage.createTransaction({
           userId: referrerUser.id,
           type: 'referral_reward',
-          amount: referrerBonus.toString(),
+          amount: referrerBonus.toFixed(2),
           description: `Referral bonus - ${referrerBonus} Bantah Points for ${user.firstName} joining`,
           status: 'completed',
         });

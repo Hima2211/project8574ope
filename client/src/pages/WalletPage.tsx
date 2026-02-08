@@ -312,9 +312,25 @@ export default function WalletPage() {
   });
 
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ["/api/user/transactions"],
+    queryKey: ["/api/transactions", user?.id],
+    queryFn: async () => {
+      try {
+        const result = await apiRequest("GET", "/api/transactions");
+        console.log('📊 Transactions API Response:', result);
+        // Handle both array and object responses
+        if (Array.isArray(result)) {
+          return result;
+        }
+        return result?.transactions || result?.items || [];
+      } catch (error) {
+        console.error("❌ Error fetching transactions:", error);
+        return [];
+      }
+    },
     retry: false,
+    enabled: !!user,
     onError: (error: Error) => {
+      console.error('❌ Transaction query error:', error);
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
@@ -590,8 +606,8 @@ export default function WalletPage() {
           </div>
         </div>
 
-        {/* Performance/Earnings Chart */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700 mt-6 sm:mt-8">
+        {/* Performance/Earnings Chart - HIDDEN FOR NOW */}
+        <div className="hidden bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700 mt-6 sm:mt-8">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">Portfolio Performance</h3>

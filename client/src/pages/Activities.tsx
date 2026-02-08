@@ -116,16 +116,16 @@ export default function Activities() {
   });
 
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
-    queryKey: ["/api/transactions"],
+    queryKey: ["/api/transactions", user?.id],
     queryFn: async () => {
       try {
-        const response = await fetch("/api/transactions", {
-          credentials: "include",
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch transactions: ${response.status}`);
+        const result = await apiRequest("GET", "/api/transactions");
+        console.log('📊 Transactions API Response:', result);
+        // Handle both array and object responses
+        if (Array.isArray(result)) {
+          return result;
         }
-        return await response.json();
+        return result?.transactions || result?.items || [];
       } catch (error) {
         console.error("Error fetching transactions:", error);
         return [];

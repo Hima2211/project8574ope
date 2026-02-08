@@ -462,9 +462,9 @@ router.post('/create-p2p', PrivyAuthMiddleware, upload.single('coverImage'), asy
       // Record points transaction in history
       await recordPointsTransaction({
         userId,
-        challengeId: String(challengeId),
+        challengeId: challengeId,
         transactionType: 'creation_reward',
-        amount: pointsWei.toString(),
+        amount: Number(pointsWei),
         reason: `Created P2P challenge: "${title}"`,
         blockchainTxHash: null,
         createdAt: new Date(),
@@ -480,7 +480,7 @@ router.post('/create-p2p', PrivyAuthMiddleware, upload.single('coverImage'), asy
       await db.insert(transactions).values({
         userId,
         type: 'challenge_created',
-        amount: creationPoints.toString(),
+        amount: creationPoints.toFixed(2),
         description: `Created challenge: "${title}"`,
         status: 'completed',
         createdAt: new Date(),
@@ -488,7 +488,11 @@ router.post('/create-p2p', PrivyAuthMiddleware, upload.single('coverImage'), asy
       
       console.log(`✅ Points transaction recorded: ${creationPoints} points to creator`);
     } catch (pointsError) {
-      console.error('Failed to record creation points:', pointsError);
+      console.error('❌ Failed to record creation points:', pointsError);
+      if (pointsError instanceof Error) {
+        console.error('   Error message:', pointsError.message);
+        console.error('   Error stack:', pointsError.stack);
+      }
       // Don't throw - continue even if points recording fails
     }
 
@@ -522,7 +526,7 @@ router.post('/create-p2p', PrivyAuthMiddleware, upload.single('coverImage'), asy
         stakeAmount: (parseInt(stakeAmount) / 2), // per-side stake
         totalPool: parseInt(stakeAmount),
         stakeAmountWei: BigInt(stakeAmount + '000000').toString(), // 6 decimals for USDC/USDT
-        category,
+        category: challengeType,
         challengerUser: {
           id: req.user?.id,
           username: req.user?.username,
@@ -958,7 +962,7 @@ router.post('/:id/join', PrivyAuthMiddleware, async (req: Request, res: Response
       await db.insert(transactions).values({
         userId,
         type: 'challenge_joined',
-        amount: participationPoints.toString(),
+        amount: participationPoints.toFixed(2),
         description: `Joined challenge: "${challenge.title || `Challenge #${challengeId}`}"`,
         status: 'completed',
         createdAt: new Date(),
@@ -968,7 +972,7 @@ router.post('/:id/join', PrivyAuthMiddleware, async (req: Request, res: Response
         userId,
         challengeId,
         transactionType: 'challenge_joined',
-        amount: pointsInWei,
+        amount: Number(pointsInWei),
         reason: `Participated in challenge #${challengeId}`,
         blockchainTxHash: txResult.transactionHash,
       });
@@ -986,7 +990,11 @@ router.post('/:id/join', PrivyAuthMiddleware, async (req: Request, res: Response
         challenge.title || `Challenge #${challengeId}`
       ).catch(err => console.error('Failed to send participation points notification:', err));
     } catch (pointsError) {
-      console.error('Failed to record participation points:', pointsError);
+      console.error('❌ Failed to record participation points:', pointsError);
+      if (pointsError instanceof Error) {
+        console.error('   Error message:', pointsError.message);
+        console.error('   Error stack:', pointsError.stack);
+      }
       // Don't fail the entire request if points recording fails
     }
 

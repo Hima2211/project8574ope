@@ -5,8 +5,8 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
-import { users, transactions, dailyLogins } from '../../shared/schema';
-import { eq, desc } from 'drizzle-orm';
+import { users, transactions, dailyLogins, challenges } from '../../shared/schema';
+import { eq, desc, sql } from 'drizzle-orm';
 import { isAuthenticated } from '../middleware/auth';
 import { PrivyAuthMiddleware } from '../privyAuth';
 import { storage } from '../storage';
@@ -186,6 +186,8 @@ router.get('/transactions', PrivyAuthMiddleware, async (req: Request, res: Respo
       .limit(limitNum)
       .offset(offsetNum);
 
+    console.log(`   Found ${userTransactions.length} transactions for user ${userId}`);
+
     // Get total count for pagination
     const totalResult = await db
       .select({ count: () => null })
@@ -193,6 +195,8 @@ router.get('/transactions', PrivyAuthMiddleware, async (req: Request, res: Respo
       .where(eq(transactions.userId, userId));
 
     const total = totalResult.length || 0;
+
+    console.log(`   Total transactions: ${total}`);
 
     // Format response
     const formattedTransactions = userTransactions.map((tx) => ({
@@ -205,20 +209,118 @@ router.get('/transactions', PrivyAuthMiddleware, async (req: Request, res: Respo
       relatedId: tx.relatedId,
     }));
 
-    res.json({
+    const response = {
       transactions: formattedTransactions,
       pagination: {
         limit: limitNum,
         offset: offsetNum,
         total,
       },
-    });
+    };
+
+    console.log(`   Returning response:`, JSON.stringify(response, null, 2));
+    res.json(response);
   } catch (error: any) {
     console.error('Error fetching transactions:', error);
     res.status(500).json({
       error: 'Failed to fetch transactions',
       message: error.message,
     });
+  }
+});
+
+/**
+ * GET /api/debug/transactions
+ * Debug endpoint to check transaction data in database
+ */
+router.get('/debug/transactions', PrivyAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    console.log(`\n🔍 DEBUG: Checking transactions for user: ${userId}`);
+
+    // Check all transactions count
+    const allTxCount = await db.select({ count: sql`COUNT(*)` }).from(transactions);
+    console.log(`   Total transactions in DB: ${(allTxCount[0] as any)?.count || 0}`);
+
+    // Check transactions for this user
+    const userTxCount = await db
+      .select({ count: sql`COUNT(*)` })
+      .from(transactions)
+      .where(eq(transactions.userId, userId));
+    console.log(`   User's transactions: ${(userTxCount[0] as any)?.count || 0}`);
+
+    // Get first 10 transactions for this user
+    const userTxs = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.userId, userId))
+      .orderBy(desc(transactions.createdAt))
+      .limit(10);
+
+    console.log(`   User transaction details:`, userTxs);
+
+    // Also check if user has created any challenges
+    const userChallenges = await db
+      .select({ count: sql`COUNT(*)` })
+      .from(challenges)
+      .where(eq(challenges.challenger as any, userId));
+    
+    console.log(`   User's challenges created: ${(userChallenges[0] as any)?.count || 0}`);
+
+    res.json({
+      userId,
+      debug: {
+        totalTransactionsInDB: (allTxCount[0] as any)?.count || 0,
+        userTransactionCount: (userTxCount[0] as any)?.count || 0,
+        userTransactions: userTxs,
+        userChallengesCreated: (userChallenges[0] as any)?.count || 0,
+      }
+    });
+  } catch (error: any) {
+    console.error('Debug error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/debug/create-test-transaction
+ * Create a test transaction for debugging
+ */
+router.post('/debug/create-test-transaction', PrivyAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    console.log(`\n✅ Creating test transaction for user: ${userId}`);
+
+    // Create a test transaction
+    const testTx = await db.insert(transactions).values({
+      userId,
+      type: 'test_transaction',
+      amount: '100.00',
+      description: 'Test transaction for debugging',
+      status: 'completed',
+      createdAt: new Date(),
+    }).returning();
+
+    console.log(`   Created test transaction:`, testTx);
+
+    res.json({
+      success: true,
+      message: 'Test transaction created',
+      transaction: testTx[0],
+    });
+  } catch (error: any) {
+    console.error('Error creating test transaction:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

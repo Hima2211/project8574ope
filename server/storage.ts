@@ -291,7 +291,7 @@ export class DatabaseStorage implements IStorage {
     await this.db.insert(transactions).values({
       userId,
       type: 'daily_login',
-      amount: rec.pointsEarned.toString(),
+      amount: rec.pointsEarned.toFixed(2),
       description: `Daily login reward - streak ${rec.streak}`,
       status: 'completed',
       createdAt: new Date(),
